@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja" class="bg-gray-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJ Timekeeper Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/core-js-bundle/minified.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=Montserrat:wght@700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // These global variables are provided by the environment.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        window.firebaseConfig = firebaseConfig;
+        window.initialAuthToken = initialAuthToken;
+        window.appId = appId;
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Montserrat', '"IBM Plex Sans JP"', 'sans-serif'],
+                        mono: ['Orbitron', 'Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        'brand-primary': '#818cf8',
+                        'brand-secondary': '#c084fc',
+                        'surface-background': '#18181b', // Near-black gray (Zinc 900)
+                        'surface-container': '#27272a', // (Zinc 800)
+                        'on-surface': '#f4f4f5', // (Zinc 100)
+                        'on-surface-variant': '#a1a1aa', // (Zinc 400)
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        dissolveIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                          pulseGlow: {
+                            '0%, 100%': { filter: 'drop-shadow(0 0 3px var(--tw-ring-color))', opacity: 1 },
+                            '50%': { filter: 'drop-shadow(0 0 10px var(--tw-ring-color))', opacity: 0.8 },
+                          }
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.7s ease-out forwards',
+                        'dissolve-in': 'dissolveIn 1.5s ease-in-out',
+                        'pulse-glow': 'pulseGlow 2.5s ease-in-out infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html, body {
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .dragging { opacity: 0.5; background: #3f3f46; } /* Zinc 700 */
+        body {
+            font-family: 'Montserrat', 'IBM Plex Sans JP', sans-serif;
+        }
+        .mask-gradient {
+            -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+        }
+    </style>
+</head>
+<body class="bg-surface-background text-on-surface">
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            doc,
+            onSnapshot,
+            setDoc,
+        };
+    </script>
+
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        const VIVID_COLORS = [
+            '#EF4444', '#F97316', '#F59E0B', '#EAB308',
+            '#84CC16', '#22C55E', '#10B981', '#14B8A6',
+            '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
+            '#8B5CF6', '#A855F7', '#D946EF', '#EC4899'
+        ];
+
+        // --- Icon Components ---
+        const PlayIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>);
+        const PlusIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
+        const TrashIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>);
+        const MoveIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>);
+        const UserIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>);
+        const UploadIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>);
+        const CopyIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>);
+        const XIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
+        const ResetIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>);
+        const AlertTriangleIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>);
+
+        const parseTime = (timeStr) => {
+            const date = new Date();
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            date.setHours(hours, minutes, 0, 0);
+            return date;
+        };
+
+        const CustomTimeInput = ({ value, onChange }) => {
+            const adjustTime = (minutes) => {
+                const date = parseTime(value);
+                date.setMinutes(date.getMinutes() + minutes);
+                onChange(date.toTimeString().slice(0, 5));
+            };
+            const buttonClasses = "px-3 py-3 rounded-lg bg-surface-background hover:bg-zinc-700 text-sm font-semibold w-12";
+            return (
+                <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => adjustTime(-15)} className={buttonClasses}>-15</button>
+                    <button type="button" onClick={() => adjustTime(-5)} className={buttonClasses}>-5</button>
+                    <input type="time" value={value} onChange={(e) => onChange(e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary text-center font-mono font-bold text-base"/>
+                    <button type="button" onClick={() => adjustTime(5)} className={buttonClasses}>+5</button>
+                    <button type="button" onClick={() => adjustTime(15)} className={buttonClasses}>+15</button>
+                </div>
+            );
+        };
+        
+        const ImageEditModal = ({ dj, onUpdate, onClose }) => {
+            const [imageUrl, setImageUrl] = useState(dj.imageUrl || '');
+            const fileInputRef = useRef(null);
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setImageUrl(reader.result);
+                    reader.readAsDataURL(file);
+                }
+            };
+            const handleSave = () => { onUpdate('imageUrl', imageUrl); onClose(); };
+            return (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in-up" onClick={onClose}>
+                    <div className="bg-surface-container rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold">アイコンを設定</h2>
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-surface-background"><XIcon className="w-6 h-6"/></button>
+                        </div>
+                        <div className="flex items-center justify-center my-6">
+                            <div className="w-40 h-40 rounded-full bg-surface-background flex items-center justify-center overflow-hidden">
+                                {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-20 h-20 text-on-surface-variant"/>}
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm text-on-surface-variant mb-1 block">Image URL</label>
+                                <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="bg-surface-background text-on-surface p-3 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary" placeholder="https://example.com/image.png"/>
+                            </div>
+                            <div>
+                                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+                                <button onClick={() => fileInputRef.current.click()} className="w-full flex items-center justify-center gap-2 bg-surface-background hover:opacity-80 text-on-surface font-semibold py-3 px-4 rounded-lg transition-opacity duration-200"><UploadIcon className="w-5 h-5"/><span>ローカルからアップロード</span></button>
+                            </div>
+                        </div>
+                         <div className="mt-6 flex justify-end gap-3">
+                            <button onClick={onClose} className="py-2 px-5 rounded-full bg-surface-background text-on-surface font-semibold">キャンセル</button>
+                            <button onClick={handleSave} className="py-2 px-5 rounded-full bg-brand-primary text-white font-semibold">保存</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+            if (!isOpen) return null;
+            return (
+                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in-up">
+                    <div className="bg-surface-container rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start gap-4">
+                           <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-500/20 sm:mx-0 sm:h-10 sm:w-10">
+                                <AlertTriangleIcon className="h-6 w-6 text-red-400" />
+                            </div>
+                            <div className="mt-0 text-left">
+                                <h3 className="text-lg leading-6 font-bold text-on-surface">{title}</h3>
+                                <div className="mt-2">
+                                    <p className="text-sm text-on-surface-variant">{message}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse gap-3">
+                             <button onClick={onConfirm} className="w-full inline-flex justify-center rounded-full border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 sm:w-auto sm:text-sm">
+                                リセット実行
+                            </button>
+                            <button onClick={onCancel} className="mt-3 w-full inline-flex justify-center rounded-full border border-zinc-600 shadow-sm px-4 py-2 bg-surface-background text-base font-medium text-on-surface hover:bg-zinc-700 sm:mt-0 sm:w-auto sm:text-sm">
+                                キャンセル
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        const TimetableEditor = ({ eventConfig, setEventConfig, timetable, setTimetable, setMode }) => {
+            const [openColorPickerId, setOpenColorPickerId] = useState(null);
+            const [editingDjIndex, setEditingDjIndex] = useState(null);
+            const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+            const [now, setNow] = useState(new Date());
+
+            useEffect(() => {
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+            
+            const schedule = useMemo(() => {
+                if (timetable.length === 0) return [];
+                const scheduleData = [];
+                let lastEndTime = parseTime(eventConfig.startTime);
+                let lastEndDate = new Date(lastEndTime);
+                for(const dj of timetable) {
+                    const startTime = new Date(lastEndTime);
+                    if (startTime.getHours() < lastEndDate.getHours()) {
+                          startTime.setDate(startTime.getDate() + 1);
+                    }
+                    const durationMinutes = parseInt(dj.duration, 10) || 0;
+                    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+                    scheduleData.push({ ...dj, startTime, endTime });
+                    lastEndTime = new Date(endTime);
+                    lastEndDate = new Date(startTime);
+                }
+                return scheduleData;
+            }, [timetable, eventConfig.startTime]);
+
+            const currentlyPlayingIndex = useMemo(() => schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime), [now, schedule]);
+
+            const recalculateTimes = (timetableData, eventStartTime) => {
+                 if (!timetableData || timetableData.length === 0) return [];
+                 const recalculated = [];
+                 let lastEndTime = parseTime(eventStartTime);
+                 for (let i = 0; i < timetableData.length; i++) {
+                       const currentDjData = { ...timetableData[i] };
+                       const currentStartTime = new Date(lastEndTime);
+                       const durationMinutes = parseInt(currentDjData.duration, 10) || 0;
+                       const currentEndTime = new Date(currentStartTime.getTime() + durationMinutes * 60 * 1000);
+                       recalculated.push({
+                           ...currentDjData,
+                           startTime: currentStartTime.toTimeString().slice(0, 5),
+                           endTime: currentEndTime.toTimeString().slice(0, 5),
+                       });
+                       lastEndTime = currentEndTime;
+                 }
+                 return recalculated;
+            };
+            
+            const handleEventConfigChange = (field, value) => {
+                const newConfig = {...eventConfig, [field]: value};
+                setEventConfig(newConfig);
+                if (field === 'startTime') {
+                    setTimetable(recalculateTimes(timetable, value));
+                }
+            };
+            
+            const handleUpdate = (index, field, value) => {
+                let newTimetable = [...timetable];
+                newTimetable[index] = { ...newTimetable[index], [field]: value };
+                 if (field === 'duration') {
+                       newTimetable = recalculateTimes(newTimetable, eventConfig.startTime);
+                 }
+                setTimetable(newTimetable);
+            };
+
+            const addNewDj = (isBuffer = false) => {
+                const lastDj = timetable[timetable.length - 1];
+                const duration = isBuffer ? 5 : (lastDj ? lastDj.duration : 60);
+                const newDjData = { id: Date.now(), name: isBuffer ? 'バッファー' : `DJ ${timetable.filter(d => !d.isBuffer).length + 1}`, duration: duration, imageUrl: '', color: VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)], isBuffer, };
+                setTimetable(recalculateTimes([...timetable, newDjData], eventConfig.startTime));
+            };
+            
+            const executeReset = () => {
+                setTimetable([]);
+                setEventConfig({
+                    title: 'My Awesome Event',
+                    startTime: '22:00'
+                });
+                setIsResetConfirmOpen(false);
+            };
+
+            const handleRemoveDj = (index) => setTimetable(recalculateTimes(timetable.filter((_, i) => i !== index), eventConfig.startTime));
+            
+            const handleCopyDj = (index) => {
+                const djToCopy = { ...timetable[index], id: Date.now() };
+                let newTimetable = [...timetable];
+                newTimetable.splice(index + 1, 0, djToCopy);
+                setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
+            };
+
+            const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+            const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
+
+
+            const handleDragStart = (e, index) => {
+                setDraggedItemIndex(index);
+                e.dataTransfer.effectAllowed = 'move';
+            };
+            
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                if (index === draggedItemIndex) return;
+                
+                const rect = e.currentTarget.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                const position = e.clientY < midY ? 'top' : 'bottom';
+                setDropIndicator({ index, position });
+            };
+
+            const handleDragLeave = (e) => {
+                setDropIndicator({ index: null, position: null });
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                if (draggedItemIndex === null || dropIndicator.index === null) return;
+
+                const dropTargetIndex = dropIndicator.index;
+                const dropPosition = dropIndicator.position;
+
+                const items = [...timetable];
+                const draggedItem = items[draggedItemIndex];
+                
+                const remainingItems = items.filter((_, i) => i !== draggedItemIndex);
+                
+                let insertAtIndex = dropTargetIndex > draggedItemIndex ? dropTargetIndex - 1 : dropTargetIndex;
+                
+                if (dropPosition === 'bottom') {
+                    insertAtIndex++;
+                }
+                
+                remainingItems.splice(insertAtIndex, 0, draggedItem);
+                
+                setTimetable(recalculateTimes(remainingItems, eventConfig.startTime));
+                
+                setDraggedItemIndex(null);
+                setDropIndicator({ index: null, position: null });
+            };
+            
+            const colorPickerRef = useRef(null);
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    const target = event.target;
+                    if (openColorPickerId && colorPickerRef.current && !colorPickerRef.current.contains(target) && !target.closest(`[data-color-picker-trigger="${openColorPickerId}"]`)) {
+                        setOpenColorPickerId(null);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, [openColorPickerId]);
+
+            const eventEnd = timetable.length > 0 ? timetable[timetable.length - 1].endTime : eventConfig.startTime;
+
+            return (
+                <div className="p-4 md:p-8 max-w-4xl mx-auto">
+                    <ConfirmModal
+                        isOpen={isResetConfirmOpen}
+                        title="タイムテーブルをリセット"
+                        message="すべてのDJと設定が削除されます。この操作は元に戻せません。本当によろしいですか？"
+                        onConfirm={executeReset}
+                        onCancel={() => setIsResetConfirmOpen(false)}
+                    />
+                    {editingDjIndex !== null && (
+                        <ImageEditModal 
+                            dj={timetable[editingDjIndex]}
+                            onUpdate={(field, value) => handleUpdate(editingDjIndex, field, value)}
+                            onClose={() => setEditingDjIndex(null)}
+                        />
+                    )}
+                    <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                        <input 
+                            type="text" 
+                            value={eventConfig.title || 'DJ Timekeeper Pro'}
+                            onChange={(e) => handleEventConfigChange('title', e.target.value)}
+                            className="text-3xl font-bold text-brand-secondary tracking-wide bg-transparent focus:outline-none focus:bg-surface-container/50 rounded-lg p-2 w-full sm:w-auto"
+                            placeholder="イベントタイトル"
+                        />
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <button onClick={() => setIsResetConfirmOpen(true)} title="すべてリセット" className="flex items-center justify-center p-3.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-full transition-colors">
+                                <ResetIcon className="w-5 h-5"/>
+                            </button>
+                            <button onClick={() => timetable.length > 0 && setMode('live')} disabled={timetable.length === 0} className="w-full flex items-center justify-center bg-brand-primary hover:opacity-90 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-full transition-opacity duration-200 shadow-lg">
+                                <PlayIcon className="w-5 h-5 mr-2"/><span>Liveモード</span>
+                            </button>
+                        </div>
+                    </header>
+
+                    <div className="bg-surface-container/50 rounded-xl p-4 mb-4 grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <p className="text-xs text-on-surface-variant tracking-wider">START</p>
+                            <p className="text-2xl font-bold font-mono">{eventConfig.startTime}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-on-surface-variant tracking-wider">END</p>
+                            <p className="text-2xl font-bold font-mono">{eventEnd}</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-surface-container/50 rounded-xl p-4 mb-8 flex flex-col items-center">
+                        <label className="text-xs text-on-surface-variant tracking-wider mb-2">イベント開始時間を設定</label>
+                        <div className="w-full max-w-xs">
+                           <CustomTimeInput value={eventConfig.startTime} onChange={(v) => handleEventConfigChange('startTime', v)} />
+                        </div>
+                    </div>
+
+
+                    <div className="space-y-4">
+                        {timetable.map((dj, index) => (
+                            <div 
+                                key={dj.id}
+                                draggable 
+                                onDragStart={(e) => handleDragStart(e, index)} 
+                                onDragOver={(e) => handleDragOver(e, index)}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                onDragEnd={() => {
+                                    setDraggedItemIndex(null);
+                                    setDropIndicator({ index: null, position: null });
+                                }}
+                                className={`
+                                    bg-surface-container p-4 rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-lg ring-1 
+                                    ${draggedItemIndex === index ? 'dragging' : ''}
+                                    ${dropIndicator.index === index && dropIndicator.position === 'top' ? 'border-t-4 border-brand-primary' : 'border-t-4 border-transparent'}
+                                    ${dropIndicator.index === index && dropIndicator.position === 'bottom' ? 'border-b-4 border-brand-primary' : 'border-b-4 border-transparent'}
+                                    ${currentlyPlayingIndex === index ? 'ring-2 animate-pulse-glow' : 'ring-1'}
+                                `}
+                                style={{'--tw-ring-color': dj.color}}
+                            >
+                                <MoveIcon className="w-6 h-6 text-on-surface-variant cursor-grab touch-none shrink-0"/>
+                                <button onClick={() => setEditingDjIndex(index)} className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all">
+                                    {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                </button>
+                                <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="flex flex-col">
+                                        <label className="text-xs text-on-surface-variant mb-1">{dj.isBuffer ? 'Title' : 'DJ Name'}</label>
+                                        <input type="text" value={dj.name} onChange={(e) => handleUpdate(index, 'name', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary"/>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label className="text-xs text-on-surface-variant mb-1">Time Slot</label>
+                                        <div className="bg-surface-background/50 p-2 rounded-lg w-full text-center font-semibold text-on-surface-variant font-mono">
+                                            <span>{dj.startTime}</span>
+                                            <span className="mx-2">-</span>
+                                            <span>{dj.endTime}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col md:col-span-2">
+                                        <label className="text-xs text-on-surface-variant mb-1">Duration (min)</label>
+                                        <input type="number" value={dj.duration} onChange={(e) => handleUpdate(index, 'duration', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary font-bold text-base" />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2 shrink-0 self-center">
+                                    <div className="relative" ref={colorPickerRef}>
+                                        <button type="button" data-color-picker-trigger={dj.id} onClick={() => setOpenColorPickerId(dj.id === openColorPickerId ? null : dj.id)} className="w-9 h-9 rounded-full ring-2 ring-on-surface-variant" style={{ backgroundColor: dj.color }}/>
+                                        {openColorPickerId === dj.id && (
+                                            <div className="absolute w-40 bottom-full mb-2 right-0 bg-surface-background p-2 rounded-lg shadow-2xl grid grid-cols-4 gap-2 z-10">
+                                                {VIVID_COLORS.map(color => (<button key={color} type="button" onClick={() => { handleUpdate(index, 'color', color); setOpenColorPickerId(null); }} className="w-8 h-8 rounded-full transition-transform hover:scale-110 focus:outline-none ring-1 ring-black/20" style={{ backgroundColor: color }} />))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={() => handleCopyDj(index)} className="text-on-surface-variant hover:text-brand-primary p-2 rounded-full transition-colors"><CopyIcon className="w-5 h-5"/></button>
+                                    <button onClick={() => handleRemoveDj(index)} className="text-on-surface-variant hover:text-red-500 p-2 rounded-full transition-colors"><TrashIcon className="w-5 h-5"/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-6 flex flex-col sm:flex-row gap-4">
+                        <button onClick={() => addNewDj(false)} className="w-full flex items-center justify-center bg-brand-primary hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-opacity duration-200"><PlusIcon className="w-5 h-5 mr-2"/><span>DJを追加</span></button>
+                        <button onClick={() => addNewDj(true)} className="w-full flex items-center justify-center bg-surface-container hover:opacity-90 text-on-surface-variant font-bold py-3 px-4 rounded-full transition-opacity duration-200"><PlusIcon className="w-5 h-5 mr-2"/><span>バッファーを追加</span></button>
+                    </div>
+                </div>
+            );
+        };
+        
+        const LiveView = ({ timetable, eventConfig, setMode }) => {
+            const [now, setNow] = useState(new Date());
+
+            const timelineContainerRef = useRef(null);
+            const [containerWidth, setContainerWidth] = useState(0);
+
+            useEffect(() => {
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                
+                const updateWidth = () => {
+                    if (timelineContainerRef.current) {
+                        setContainerWidth(timelineContainerRef.current.offsetWidth);
+                    }
+                };
+                updateWidth();
+                window.addEventListener('resize', updateWidth);
+
+                return () => {
+                    clearInterval(timer);
+                    window.removeEventListener('resize', updateWidth);
+                };
+            }, []);
+
+
+            const schedule = useMemo(() => {
+                if (timetable.length === 0) return [];
+                const scheduleData = [];
+                let lastEndTime = parseTime(eventConfig.startTime);
+                let lastEndDate = new Date(lastEndTime);
+                for(const dj of timetable) {
+                    const startTime = new Date(lastEndTime);
+                    if (startTime.getHours() < lastEndDate.getHours()) {
+                          startTime.setDate(startTime.getDate() + 1);
+                    }
+                    const durationMinutes = parseInt(dj.duration, 10) || 0;
+                    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+                    scheduleData.push({ ...dj, startTime, endTime });
+                    lastEndTime = new Date(endTime);
+                    lastEndDate = new Date(startTime);
+                }
+                return scheduleData;
+            }, [timetable, eventConfig.startTime]);
+
+            const realTimeIndex = useMemo(() => schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime), [now, schedule]);
+            
+            const displayIndex = realTimeIndex;
+
+            const { currentDj, nextDj, timeLeft, progress, status } = useMemo(() => {
+                if (displayIndex === -1) {
+                     const upcomingDj = schedule.find(dj => now < dj.startTime);
+                     if (upcomingDj) return { status: 'UPCOMING', currentDj: upcomingDj, timeLeft: (upcomingDj.startTime - now) / 1000, progress: 0 };
+                     return { status: 'FINISHED' };
+                }
+                const currentDj = schedule[displayIndex];
+                const nextDj = displayIndex < schedule.length - 1 ? schedule[displayIndex + 1] : null;
+                const totalDuration = (currentDj.endTime - currentDj.startTime) / 1000;
+                const timeLeft = (currentDj.endTime - now) / 1000;
+                const progress = totalDuration > 0 ? ((totalDuration - timeLeft) / totalDuration) * 100 : 0;
+                return { currentDj, nextDj, timeLeft, progress, status: 'ON AIR' };
+            }, [displayIndex, now, schedule]);
+
+            const timelineTransform = useMemo(() => {
+                if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
+                
+                const itemWidth = 256; // w-64
+                const gap = 24; // gap-6
+                const step = itemWidth + gap;
+                
+                const centerScreenOffset = containerWidth / 2;
+                const centerItemOffset = itemWidth / 2;
+                
+                let targetIndex = displayIndex;
+
+                if (displayIndex === -1) { // Before event starts
+                    const upcomingDjIndex = schedule.findIndex(dj => now < dj.startTime);
+                    targetIndex = upcomingDjIndex !== -1 ? upcomingDjIndex : 0;
+                }
+                
+                const baseOffset = targetIndex * step;
+                const totalOffset = baseOffset;
+                const finalX = centerScreenOffset - centerItemOffset - totalOffset;
+
+                return `translateX(${finalX}px)`;
+            }, [displayIndex, containerWidth, schedule, now]);
+            
+            const formatTime = (seconds) => {
+                if (seconds < 0) seconds = 0;
+                const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
+                let timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                return h > 0 ? `${h}:${timeStr}` : timeStr;
+            };
+            
+            const djToDisplay = status !== 'FINISHED' ? currentDj : null;
+            const bgColorStyle = djToDisplay ? { background: `radial-gradient(ellipse 80% 60% at 50% 120%, ${djToDisplay.color}33, transparent)` } : {};
+            
+            return (
+                <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
+                    <div key={`bg-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in -z-10">
+                        {djToDisplay && djToDisplay.imageUrl && (
+                            <div className="absolute inset-0 overflow-hidden">
+                                <img src={djToDisplay.imageUrl} className="w-full h-full object-cover blur-2xl scale-110 opacity-20" />
+                            </div>
+                        )}
+                    </div>
+
+                    <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
+                           <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
+                           <div className="bg-black/30 backdrop-blur-sm text-on-surface font-bold py-2 px-4 rounded-full text-2xl tracking-wider font-mono text-center w-[10ch]">
+                            {now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </div>
+                    </header>
+                    <button onClick={() => setMode('edit')} className="absolute top-4 right-4 flex items-center bg-surface-container hover:opacity-90 text-white font-bold py-2 px-4 rounded-full transition-opacity duration-200 text-sm z-20">編集</button>
+
+                    <div className="flex-grow flex items-center justify-center w-full relative px-4">
+                        <div key={`content-${djToDisplay?.id || 'finished'}`} className="w-full animate-fade-in-up">
+                            {status === 'ON AIR' && djToDisplay && (
+                                <main className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-center gap-8">
+                                    {!djToDisplay.isBuffer && (
+                                        <div className="w-full max-w-sm sm:max-w-md aspect-square bg-surface-container rounded-full shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
+                                            {djToDisplay.imageUrl ? <img src={djToDisplay.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-1/2 h-1/2 text-on-surface-variant"/>}
+                                        </div>
+                                    )}
+                                    <div className={`flex flex-col ${djToDisplay.isBuffer ? 'items-center text-center' : 'text-center md:text-left'}`}>
+                                        <div className="flex flex-col gap-3">
+                                            <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold break-words leading-tight">{djToDisplay.name}</h1>
+                                            
+                                            {djToDisplay.isBuffer ? (
+                                                <>
+                                                    <p className="text-2xl md:text-3xl font-semibold tracking-wider font-mono" style={{color: djToDisplay.color}}>
+                                                        {djToDisplay.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {djToDisplay.endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                    </p>
+                                                    <div className="mt-4">
+                                                        <span className="text-3xl sm:text-4xl text-on-surface-variant font-sans font-bold block">残り</span>
+                                                        <span className="font-mono text-6xl sm:text-7xl md:text-8xl">{formatTime(timeLeft)}</span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="text-2xl md:text-3xl font-semibold tracking-wider font-mono" style={{color: djToDisplay.color}}>
+                                                        {djToDisplay.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {djToDisplay.endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                    </p>
+                                                    <p className="flex items-baseline justify-center md:justify-start text-6xl sm:text-7xl md:text-8xl text-on-surface my-2 whitespace-nowrap">
+                                                        <span className="text-3xl sm:text-4xl text-on-surface-variant mr-4 font-sans font-bold">残り</span>
+                                                        <span className="font-mono inline-block text-left w-[5ch]">{formatTime(timeLeft)}</span>
+                                                    </p>
+                                                </>
+                                            )}
+
+                                            <div className={`bg-surface-container rounded-full h-3.5 overflow-hidden ${djToDisplay.isBuffer ? 'w-full max-w-md mx-auto' : 'w-full'}`}>
+                                                <div className="h-full rounded-full transition-all duration-500 ease-linear" style={{ width: `${progress}%`, backgroundColor: djToDisplay.color }}></div>
+                                            </div>
+                                        </div>
+                                        {nextDj && (
+                                            <div className="mt-8 pt-6 border-t border-on-surface-variant/20">
+                                                <p className="text-sm text-on-surface-variant font-bold tracking-widest mb-1">NEXT UP</p>
+                                                <p className="text-2xl font-semibold">{nextDj.name} <span className="text-lg font-sans text-on-surface-variant ml-2 font-mono">{nextDj.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} ~</span></p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </main>
+                            )}
+                            {status === 'UPCOMING' && djToDisplay && (
+                                <div className="text-center">
+                                    <p className="text-2xl text-on-surface-variant font-medium">UPCOMING</p>
+                                    <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
+                                    <p className="text-4xl md:text-5xl font-mono" style={{color: djToDisplay.color}}>開始まで {formatTime(timeLeft)}</p>
+                                </div>
+                            )}
+                            {status === 'FINISHED' && (
+                                <div className="text-center"><h1 className="text-5xl md:text-7xl font-bold">EVENT FINISHED</h1></div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div ref={timelineContainerRef} className="w-full shrink-0 overflow-hidden mask-gradient z-10 pb-4">
+                        <div className="flex h-full items-center gap-6 px-4 py-2" style={{ transform: timelineTransform, transition: 'transform 0.5s ease-in-out' }}>
+                            {schedule.map((dj, index) => (
+                                <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${displayIndex === index ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
+                                    {!dj.isBuffer && (
+                                        <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                            {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                        </div>
+                                    )}
+                                    <div className="overflow-hidden flex flex-col justify-center">
+                                        <p className={`text-lg font-bold truncate w-full ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.name}</p>
+                                        <p className={`text-sm font-mono text-on-surface-variant ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [mode, setMode] = useState('edit');
+            const [timetable, setTimetable] = useState([]);
+            const [eventConfig, setEventConfig] = useState({ title: 'DJ Timekeeper Pro', startTime: '22:00' });
+            const [userId, setUserId] = useState(null);
+            const dbRef = useRef(null);
+            
+            // --- Firebase Initialization and Auth ---
+            useEffect(() => {
+                const { initializeApp, getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, getFirestore } = window.firebase;
+                
+                try {
+                    const app = initializeApp(window.firebaseConfig);
+                    const auth = getAuth(app);
+                    const db = getFirestore(app);
+                    dbRef.current = db;
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            setUserId(user.uid);
+                        } else {
+                            if (window.initialAuthToken) {
+                                await signInWithCustomToken(auth, window.initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Firebase initialization failed:", e);
+                }
+            }, []);
+            
+            // --- Firestore Data Loading ---
+            useEffect(() => {
+                if (!userId || !dbRef.current) return;
+
+                const { doc, onSnapshot } = window.firebase;
+                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'users', userId);
+
+                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setTimetable(data.timetable || []);
+                        setEventConfig(data.eventConfig || { title: 'DJ Timekeeper Pro', startTime: '22:00' });
+                    } else {
+                        console.log("No such document! Creating initial data.");
+                    }
+                });
+
+                return () => unsubscribe();
+            }, [userId]);
+
+            // --- Firestore Data Saving ---
+            const saveDataToFirestore = useCallback(() => {
+                if (!userId || !dbRef.current) return;
+                const { doc, setDoc } = window.firebase;
+                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'users', userId);
+                const dataToSave = { timetable, eventConfig };
+                setDoc(docRef, dataToSave, { merge: true });
+            }, [timetable, eventConfig, userId]);
+
+            // Debounce saving
+            useEffect(() => {
+                const handler = setTimeout(() => {
+                    saveDataToFirestore();
+                }, 1000); // Save 1 second after last change
+                return () => clearTimeout(handler);
+            }, [timetable, eventConfig, saveDataToFirestore]);
+
+
+            if (!userId) {
+                return <div className="flex items-center justify-center h-screen"><p className="text-2xl">Connecting...</p></div>;
+            }
+
+            return mode === 'edit' ? 
+                <TimetableEditor {...{eventConfig, setEventConfig, timetable, setTimetable, setMode}} /> : 
+                <LiveView {...{timetable, eventConfig, setMode}} />;
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
+
