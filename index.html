@@ -91,6 +91,7 @@
         .dragging-item {
             opacity: 0.5;
             transform: scale(1.05);
+            background-color: #3f3f46; /* Zinc 700 */
         }
     </style>
 </head>
@@ -300,7 +301,7 @@
 
             return (
                 <div
-                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4 ${ringClass}`}
+                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4`}
                     style={{ '--tw-ring-color': isPlaying ? dj.color : 'transparent' }}
                 >
                      <div className="cursor-grab touch-none" onPointerDown={onPointerDown}>
@@ -352,12 +353,20 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
-            
             const [draggedIndex, setDraggedIndex] = useState(null);
-            const dragItemNode = useRef(null);
-
             const [isGodMode, setIsGodMode] = useState(false);
             const originalTimetableRef = useRef(null);
+            
+            const dragStateRef = useRef({
+                draggedIndex: null,
+                isDragging: false,
+                timetable: timetable
+            });
+
+            useEffect(() => {
+                dragStateRef.current.draggedIndex = draggedIndex;
+                dragStateRef.current.timetable = timetable;
+            }, [draggedIndex, timetable]);
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -450,31 +459,38 @@
                 });
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
-            const handleDragStart = (e, index) => {
-                setDraggedIndex(index);
-                dragItemNode.current = e.target;
-                dragItemNode.current.addEventListener('dragend', handleDragEnd);
-            };
-
-            const handleDragEnter = (e, targetIndex) => {
-                if (draggedIndex === null || dragItemNode.current === e.target) return;
-                
-                setTimetable(prevTimetable => {
-                    let newTimetable = [...prevTimetable];
-                    const [draggedItem] = newTimetable.splice(draggedIndex, 1);
-                    newTimetable.splice(targetIndex, 0, draggedItem);
+            const handlePointerMove = useCallback((e) => {
+                if (!dragStateRef.current.isDragging) return;
+                const targetEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-dj-index]');
+                if (!targetEl) return;
+                const targetIndex = parseInt(targetEl.dataset.djIndex, 10);
+                const currentIndex = dragStateRef.current.draggedIndex;
+                if (!isNaN(targetIndex) && targetIndex !== currentIndex) {
+                    const newTimetable = [...dragStateRef.current.timetable];
+                    const [movedItem] = newTimetable.splice(currentIndex, 1);
+                    newTimetable.splice(targetIndex, 0, movedItem);
+                    dragStateRef.current.draggedIndex = targetIndex;
                     setDraggedIndex(targetIndex);
-                    return newTimetable; 
-                });
-            };
+                    setTimetable(newTimetable);
+                }
+            }, [setTimetable]);
 
-            const handleDragEnd = () => {
+            const handlePointerUp = useCallback(() => {
+                if (!dragStateRef.current.isDragging) return;
+                dragStateRef.current.isDragging = false;
+                setTimetable(currentTimetable => recalculateTimes(currentTimetable, eventConfig.startTime));
                 setDraggedIndex(null);
-                dragItemNode.current.removeEventListener('dragend', handleDragEnd);
-                dragItemNode.current = null;
+                window.removeEventListener('pointermove', handlePointerMove);
+                window.removeEventListener('pointerup', handlePointerUp);
+            }, [eventConfig.startTime, recalculateTimes, setTimetable, handlePointerMove]);
 
-                setTimetable(prev => recalculateTimes(prev, eventConfig.startTime));
-            };
+            const handlePointerDown = useCallback((e, index) => {
+                e.preventDefault();
+                setDraggedIndex(index);
+                dragStateRef.current.isDragging = true;
+                window.addEventListener('pointermove', handlePointerMove);
+                window.addEventListener('pointerup', handlePointerUp);
+            }, [handlePointerMove, handlePointerUp]);
 
             const toggleGodMode = () => {
                 setIsGodMode(prev => {
@@ -546,15 +562,13 @@
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, index)}
-                                onDragEnter={(e) => handleDragEnter(e, index)}
-                                onDragOver={e => e.preventDefault()}
+                                data-dj-index={index}
                                 className={`transition-all duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
                            >
                                 <DjItem
                                     dj={dj}
                                     isPlaying={currentlyPlayingIndex === index}
+                                    onPointerDown={(e) => handlePointerDown(e, index)}
                                     onEditClick={() => setEditingDjIndex(index)}
                                     onUpdate={(field, value) => handleUpdate(index, field, value)}
                                     onColorPickerToggle={setOpenColorPickerId}
