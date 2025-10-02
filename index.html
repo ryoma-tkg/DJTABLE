@@ -499,7 +499,7 @@
                                 onPointerDown={(e) => e.stopPropagation()}
                                 className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
                             >
-                                {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" style={{ transform: 'translateZ(0)' }} /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                             </button>
                             <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                 {/*... form inputs ...*/}
