@@ -698,14 +698,14 @@
                      
                      if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
 
-                     if(backgroundDj) setFadingOutDj(backgroundDj); else setFadingOutDj(null);
+                     setFadingOutDj(backgroundDj);
                      
                      const hasNewImage = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
                      
                      backgroundTimeoutRef.current = setTimeout(() => {
                         setBackgroundDj(hasNewImage ? newCurrentDj : null);
-                        setTimeout(() => setFadingOutDj(null), 1500);
-                     }, 1000);
+                        setTimeout(() => setFadingOutDj(null), 1500); // Clean up after fade out animation
+                     }, 100); // Short delay to ensure fade-out starts
                 }
                 
                 setNextDj(newNextDj);
