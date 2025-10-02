@@ -60,11 +60,16 @@
                             'from': { opacity: '1' },
                             'to': { opacity: '0' },
                         },
+                         spinner: {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' },
+                        }
                     },
                     animation: {
                         'fade-in-up': 'fadeInUp 0.7s ease-out forwards',
                         'fade-in': 'fadeIn 1.5s ease-in-out forwards',
                         'fade-out': 'fadeOut 1.5s ease-in-out forwards',
+                        'spinner': 'spinner 1s linear infinite',
                     }
                 }
             }
@@ -357,9 +362,9 @@
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
             const [draggedIndex, setDraggedIndex] = useState(null);
-            const draggedItem = useRef(null);
-            const placeholderRef = useRef(null);
-            const listRef = useRef(null);
+            
+            const dragItem = useRef(null);
+            const dragOverItem = useRef(null);
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -447,51 +452,26 @@
                 });
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
-            const onDragStart = (e, index) => {
-                setDraggedIndex(index);
-                draggedItem.current = e.currentTarget;
-                
-                const placeholder = placeholderRef.current;
-                placeholder.style.height = `${e.currentTarget.offsetHeight}px`;
-                placeholder.style.width = `${e.currentTarget.offsetWidth}px`;
-                
-                e.currentTarget.style.opacity = '0.5';
+            const handleDragStart = (e, index) => {
+                dragItem.current = index;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', e.target); // for Firefox
             };
 
-            const onDragOver = (e, index) => {
-                e.preventDefault();
-                const draggedOverItem = e.currentTarget;
-
-                if (draggedIndex === null || draggedIndex === index || !draggedItem.current) return;
-                
-                const list = listRef.current;
-                const items = Array.from(list.children).filter(child => child !== placeholderRef.current && child !== draggedItem.current);
-                
-                const bounding = draggedOverItem.getBoundingClientRect();
-                const offset = bounding.y + (bounding.height / 2);
-
-                if (e.clientY > offset) {
-                    list.insertBefore(placeholderRef.current, draggedOverItem.nextSibling);
-                } else {
-                    list.insertBefore(placeholderRef.current, draggedOverItem);
-                }
-
-                const newTimetable = [...timetable];
-                const [dragged] = newTimetable.splice(draggedIndex, 1);
-                newTimetable.splice(index, 0, dragged);
-                setTimetable(newTimetable);
-                setDraggedIndex(index);
+            const handleDragEnter = (e, index) => {
+                dragOverItem.current = index;
+                const list = [...timetable];
+                const draggedItemContent = list[dragItem.current];
+                list.splice(dragItem.current, 1);
+                list.splice(dragOverItem.current, 0, draggedItemContent);
+                dragItem.current = dragOverItem.current;
+                setTimetable(list);
             };
-            
-            const onDragEnd = () => {
-                if(draggedItem.current) {
-                    draggedItem.current.style.opacity = '1';
-                }
-                setDraggedIndex(null);
-                placeholderRef.current.style.height = '0px';
 
-                // Recalculate times after dropping
+            const handleDragEnd = (e) => {
                 setTimetable(current => recalculateTimes(current, eventConfig.startTime));
+                dragItem.current = null;
+                dragOverItem.current = null;
             };
 
             return (
@@ -537,15 +517,16 @@
                         </div>
                     </div>
 
-                    <div ref={listRef} className="space-y-4">
+                    <div className="space-y-4">
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
                                 draggable
-                                onDragStart={(e) => onDragStart(e, index)}
-                                onDragOver={(e) => onDragOver(e, index)}
-                                onDragEnd={onDragEnd}
-                                className={draggedIndex === index ? 'opacity-50' : ''}
+                                onDragStart={(e) => handleDragStart(e, index)}
+                                onDragEnter={(e) => handleDragEnter(e, index)}
+                                onDragEnd={handleDragEnd}
+                                onDragOver={(e) => e.preventDefault()}
+                                className="transition-shadow duration-200"
                            >
                                 <DjItem
                                     dj={dj}
@@ -560,7 +541,6 @@
                                 />
                            </div>
                         ))}
-                        <div ref={placeholderRef} className="bg-brand-primary/20 rounded-2xl transition-all" style={{height: '0px'}}></div>
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row gap-4">
                         <button onClick={() => addNewDj(false)} className="w-full flex items-center justify-center bg-brand-primary hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-opacity duration-200"><PlusIcon className="w-5 h-5 mr-2"/><span>DJを追加</span></button>
@@ -788,10 +768,13 @@
             const [eventConfig, setEventConfig] = useState({ title: 'DJ Timekeeper Pro', startTime: '22:00' });
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [appStatus, setAppStatus] = useState('connecting'); // 'connecting', 'online', 'offline', 'config_error'
+            const [isInitialLoading, setIsInitialLoading] = useState(true);
             const dbRef = useRef(null);
             const storageRef = useRef(null);
             
             useEffect(() => {
+                setTimeout(() => setIsInitialLoading(false), 1500);
+
                 if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("AIzaSy...")) {
                     setAppStatus('config_error');
                     return;
@@ -874,6 +857,15 @@
                     return () => clearTimeout(handler);
                 }
             }, [timetable, eventConfig, saveDataToFirestore, appStatus]);
+
+            if (isInitialLoading) {
+                 return (
+                    <div className="flex flex-col items-center justify-center h-screen bg-surface-background">
+                        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spinner mb-4"></div>
+                        <p className="text-lg text-on-surface-variant">Loading Timetable...</p>
+                    </div>
+                );
+            }
 
             switch (appStatus) {
                 case 'connecting':
