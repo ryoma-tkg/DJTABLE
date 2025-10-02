@@ -664,13 +664,10 @@
                 const initialOnAirDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime);
                 if (initialOnAirDj) {
                     setCurrentDj(initialOnAirDj);
-                    setBackgroundDj(initialOnAirDj);
-                } else {
-                    const initialUpcomingDj = schedule.find(dj => new Date() < dj.startTime);
-                    setCurrentDj(initialUpcomingDj || schedule[0] || null);
-                    setBackgroundDj(null);
+                    if (initialOnAirDj.imageUrl && !initialOnAirDj.isBuffer) {
+                        setBackgroundDj(initialOnAirDj);
+                    }
                 }
-
 
                 return () => {
                     clearInterval(timer);
@@ -698,7 +695,7 @@
                     }
                 }
                 
-                if (newCurrentDj?.id !== currentDj?.id || newStatus !== status) {
+                if ((newCurrentDj?.id !== currentDj?.id) || (newStatus !== status && status === 'LOADING')) {
                      setCurrentDj(newCurrentDj);
                      
                      if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
@@ -709,9 +706,9 @@
                      const hasNewImage = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
                      
                      backgroundTimeoutRef.current = setTimeout(() => {
-                        setBackgroundDj(hasNewImage ? newCurrentDj : null);
+                        if(hasNewImage) setBackgroundDj(newCurrentDj);
                         setFadingOutDj(null);
-                     }, 1500); // Wait for fade-out to complete
+                     }, 1500);
                 }
                 
                 setNextDj(newNextDj);
@@ -733,7 +730,11 @@
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
                 const itemWidth = 256, gap = 24, step = itemWidth + gap;
                 const centerScreenOffset = containerWidth / 2, centerItemOffset = itemWidth / 2;
-                const targetIndex = currentDj ? schedule.findIndex(dj => dj.id === currentDj.id) : (schedule.findIndex(dj => now < dj.startTime) ?? schedule.length - 1);
+                let targetIndex = schedule.findIndex(dj => dj.id === currentDj?.id);
+                if (targetIndex === -1) {
+                    targetIndex = schedule.findIndex(dj => now < dj.startTime) ?? schedule.length - 1;
+                }
+
                 const finalX = centerScreenOffset - centerItemOffset - (targetIndex * step);
                 return `translateX(${finalX}px)`;
             }, [currentDj, containerWidth, schedule, now]);
@@ -745,7 +746,8 @@
             };
             
             const djToDisplay = currentDj;
-            const bgColorStyle = djToDisplay ? { background: `radial-gradient(ellipse 80% 60% at 50% 120%, ${djToDisplay.color}33, transparent)` } : {};
+            const isFirstDjUpcoming = status === 'UPCOMING' && schedule.findIndex(dj => dj.id === djToDisplay?.id) === 0;
+            const bgColorStyle = (djToDisplay && status === 'ON AIR') ? { background: `radial-gradient(ellipse 80% 60% at 50% 120%, ${djToDisplay.color}33, transparent)` } : {};
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
@@ -761,7 +763,7 @@
                     <button onClick={() => setMode('edit')} className="absolute top-4 right-4 flex items-center bg-surface-container hover:opacity-90 text-white font-bold py-2 px-4 rounded-full transition-opacity duration-200 text-sm z-20">編集</button>
 
                     <div className="flex-grow flex items-center justify-center w-full relative px-4">
-                        <div key={`content-${djToDisplay?.id || 'finished'}`} className="w-full animate-fade-in-up">
+                        <div key={`${status}-${djToDisplay?.id || 'finished'}`} className="w-full animate-fade-in-up">
                             {status === 'ON AIR' && djToDisplay && (
                                 <main className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-center gap-8">
                                     {!djToDisplay.isBuffer && (
@@ -795,7 +797,14 @@
                                     </div>
                                 </main>
                             )}
-                            {status === 'UPCOMING' && djToDisplay && (
+                            {isFirstDjUpcoming && djToDisplay && (
+                                 <div className="text-center">
+                                     <p className="text-sm text-on-surface-variant font-bold tracking-widest mb-1">FIRST DJ</p>
+                                     <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
+                                     <p className="text-4xl md:text-5xl font-mono" style={{color: djToDisplay.color}}>開始まで {formatTime(timeLeft)}</p>
+                                 </div>
+                            )}
+                            {status === 'UPCOMING' && !isFirstDjUpcoming && djToDisplay && (
                                 <div className="text-center">
                                     <p className="text-2xl text-on-surface-variant font-medium">UPCOMING</p>
                                     <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
