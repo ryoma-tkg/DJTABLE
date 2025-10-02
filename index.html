@@ -52,19 +52,19 @@
                             '0%': { opacity: '0', transform: 'translateY(20px)' },
                             '100%': { opacity: '1', transform: 'translateY(0)' },
                         },
-                        dissolveInTo30: {
+                        fadeIn: {
                             'from': { opacity: '0' },
-                            'to': { opacity: '0.3' },
+                            'to': { opacity: '1' },
                         },
-                        fadeOutFrom30: {
-                            'from': { opacity: '0.3' },
+                        fadeOut: {
+                            'from': { opacity: '1' },
                             'to': { opacity: '0' },
                         },
                     },
                     animation: {
                         'fade-in-up': 'fadeInUp 0.7s ease-out forwards',
-                        'dissolve-in-to-30': 'dissolveInTo30 1.5s ease-in-out forwards',
-                        'fade-out-from-30': 'fadeOutFrom30 1.5s ease-in-out forwards',
+                        'fade-in': 'fadeIn 1.5s ease-in-out forwards',
+                        'fade-out': 'fadeOut 1.5s ease-in-out forwards',
                     }
                 }
             }
@@ -132,6 +132,21 @@
         const XIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
         const ResetIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>);
         const AlertTriangleIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>);
+
+        const FadeInImage = memo(({ src, className, alt = "" }) => {
+            const [isLoaded, setIsLoaded] = useState(false);
+            useEffect(() => {
+                setIsLoaded(false); // Reset on src change
+            }, [src]);
+            return (
+                <img
+                    src={src}
+                    alt={alt}
+                    onLoad={() => setIsLoaded(true)}
+                    className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                />
+            );
+        });
 
         const parseTime = (timeStr) => {
             const date = new Date();
@@ -202,7 +217,7 @@
                         </div>
                         <div className="flex items-center justify-center my-6">
                             <div className="w-40 h-40 rounded-full bg-surface-background flex items-center justify-center overflow-hidden">
-                                {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-20 h-20 text-on-surface-variant"/>}
+                                {imageUrl ? <FadeInImage src={imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-20 h-20 text-on-surface-variant"/>}
                             </div>
                         </div>
                         <div className="space-y-4">
@@ -267,7 +282,7 @@
         };
         
         const DjItem = memo(({ 
-            dj, index, isPlaying, isBeingDragged, dropIndicator, isColorPickerOpen, 
+            dj, index, isPlaying, isBeingDragged, dropIndicator, isColorPickerOpen, openColorPickerId,
             setRef, onPointerDown, onDragStart, onEditClick, onUpdate, onColorPickerToggle, onCopy, onRemove
         }) => {
             const colorPickerRef = useRef(null);
@@ -287,13 +302,13 @@
                 <div 
                     ref={setRef}
                     className="relative"
+                    onDragStart={onDragStart}
                 >
                     {dropIndicator.index === index && dropIndicator.position === 'top' && (
                         <div className="absolute -top-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
                     )}
                     
                     <div
-                        onDragStart={onDragStart}
                         className={`
                             bg-surface-container rounded-2xl flex items-center gap-4 transition-shadow duration-300 shadow-lg p-4
                             ${isBeingDragged ? 'opacity-0' : 'opacity-100'}
@@ -309,7 +324,7 @@
                             onPointerDown={(e) => e.stopPropagation()}
                             className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
                         >
-                            {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                            {dj.imageUrl ? <FadeInImage src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                         </button>
                         <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                             <div className="flex flex-col">
@@ -349,7 +364,6 @@
                 </div>
             );
         });
-
 
         const TimetableEditor = ({ eventConfig, setEventConfig, timetable, setTimetable, setMode, storage }) => {
             const [openColorPickerId, setOpenColorPickerId] = useState(null);
@@ -411,43 +425,49 @@
                 const newConfig = {...eventConfig, [field]: value};
                 setEventConfig(newConfig);
                 if (field === 'startTime') {
-                    setTimetable(recalculateTimes(timetable, value));
+                    setTimetable(prevTimetable => recalculateTimes(prevTimetable, value));
                 }
-            }, [eventConfig, timetable, recalculateTimes]);
+            }, [eventConfig, recalculateTimes]);
             
             const handleUpdate = useCallback((index, field, value) => {
-                let newTimetable = [...timetable];
-                newTimetable[index] = { ...newTimetable[index], [field]: value };
-                 if (field === 'duration') {
-                       newTimetable = recalculateTimes(newTimetable, eventConfig.startTime);
-                 }
-                setTimetable(newTimetable);
-            }, [timetable, eventConfig.startTime, recalculateTimes]);
+                setTimetable(prevTimetable => {
+                    let newTimetable = [...prevTimetable];
+                    newTimetable[index] = { ...newTimetable[index], [field]: value };
+                     if (field === 'duration') {
+                           return recalculateTimes(newTimetable, eventConfig.startTime);
+                     }
+                    return newTimetable;
+                });
+            }, [eventConfig.startTime, recalculateTimes]);
 
             const addNewDj = useCallback((isBuffer = false) => {
-                const lastDj = timetable[timetable.length - 1];
-                const duration = isBuffer ? 5 : (lastDj ? lastDj.duration : 60);
-                const newDjData = { id: Date.now(), name: isBuffer ? 'バッファー' : `DJ ${timetable.filter(d => !d.isBuffer).length + 1}`, duration: duration, imageUrl: '', color: VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)], isBuffer, };
-                setTimetable(recalculateTimes([...timetable, newDjData], eventConfig.startTime));
-            }, [timetable, eventConfig.startTime, recalculateTimes]);
+                setTimetable(prevTimetable => {
+                    const lastDj = prevTimetable[prevTimetable.length - 1];
+                    const duration = isBuffer ? 5 : (lastDj ? lastDj.duration : 60);
+                    const newDjData = { id: Date.now(), name: isBuffer ? 'バッファー' : `DJ ${prevTimetable.filter(d => !d.isBuffer).length + 1}`, duration: duration, imageUrl: '', color: VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)], isBuffer, };
+                    return recalculateTimes([...prevTimetable, newDjData], eventConfig.startTime);
+                });
+            }, [eventConfig.startTime, recalculateTimes]);
             
-            const executeReset = () => {
+            const executeReset = useCallback(() => {
                 setTimetable([]);
                 setEventConfig({
                     title: 'My Awesome Event',
                     startTime: '22:00'
                 });
                 setIsResetConfirmOpen(false);
-            };
+            }, []);
 
-            const handleRemoveDj = useCallback((index) => setTimetable(recalculateTimes(timetable.filter((_, i) => i !== index), eventConfig.startTime)), [timetable, eventConfig.startTime, recalculateTimes]);
+            const handleRemoveDj = useCallback((index) => setTimetable(prevTimetable => recalculateTimes(prevTimetable.filter((_, i) => i !== index), eventConfig.startTime)), [eventConfig.startTime, recalculateTimes]);
             
             const handleCopyDj = useCallback((index) => {
-                const djToCopy = { ...timetable[index], id: Date.now() };
-                let newTimetable = [...timetable];
-                newTimetable.splice(index + 1, 0, djToCopy);
-                setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
-            }, [timetable, eventConfig.startTime, recalculateTimes]);
+                setTimetable(prevTimetable => {
+                    const djToCopy = { ...prevTimetable[index], id: Date.now() };
+                    let newTimetable = [...prevTimetable];
+                    newTimetable.splice(index + 1, 0, djToCopy);
+                    return recalculateTimes(newTimetable, eventConfig.startTime);
+                });
+            }, [eventConfig.startTime, recalculateTimes]);
 
             const handlePointerDown = useCallback((e, index) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -478,9 +498,7 @@
                 const clientX = e.clientX ?? e.touches[0].clientX;
                 const clientY = e.clientY ?? e.touches[0].clientY;
 
-                if (ghost) {
-                    setGhost(g => ({ ...g, top: clientY, left: clientX }));
-                }
+                setGhost(g => g ? ({ ...g, top: clientY, left: clientX }) : null);
 
                 let targetIndex = -1;
                 let targetPosition = null;
@@ -501,35 +519,35 @@
                 } else {
                     setDropIndicator({ index: null, position: null });
                 }
-            }, [draggedItemIndex, ghost]);
+            }, [draggedItemIndex]);
             
-            const handlePointerUp = useCallback((e) => {
-                if (draggedItemIndex === null) {
-                    return;
-                }
-                
+            const handlePointerUp = useCallback(() => {
+                if (draggedItemIndex === null) return;
+
                 const draggableElement = itemRefs.current[draggedItemIndex];
                 if(draggableElement) draggableElement.setAttribute('draggable', 'false');
 
                 if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                    const list = [...timetable];
-                    const [itemToMove] = list.splice(draggedItemIndex, 1);
-
-                    let insertAtIndex = dropIndicator.index;
-                    if (draggedItemIndex < dropIndicator.index) {
-                        insertAtIndex--;
-                    }
-                    if (dropIndicator.position === 'bottom') {
-                        insertAtIndex++;
-                    }
-                    list.splice(insertAtIndex, 0, itemToMove);
-                    setTimetable(recalculateTimes(list, eventConfig.startTime));
+                    setTimetable(prevTimetable => {
+                        const list = [...prevTimetable];
+                        const [itemToMove] = list.splice(draggedItemIndex, 1);
+                        
+                        let insertAtIndex = dropIndicator.index;
+                        if(draggedItemIndex < dropIndicator.index) {
+                            insertAtIndex = dropIndicator.position === 'top' ? insertAtIndex - 1 : insertAtIndex;
+                        } else {
+                            insertAtIndex = dropIndicator.position === 'bottom' ? insertAtIndex + 1 : insertAtIndex;
+                        }
+                        
+                        list.splice(insertAtIndex, 0, itemToMove);
+                        return recalculateTimes(list, eventConfig.startTime);
+                    });
                 }
                 
                 setDraggedItemIndex(null);
                 setDropIndicator({ index: null, position: null });
                 setGhost(null);
-            }, [draggedItemIndex, dropIndicator, timetable, eventConfig.startTime, recalculateTimes]);
+            }, [draggedItemIndex, dropIndicator, eventConfig.startTime, recalculateTimes]);
             
             const handleDragStart = useCallback((e) => {
                 const img = new Image();
@@ -548,18 +566,18 @@
                 >
                     {ghost && timetable[ghost.index] && (
                         <div
-                            className="fixed pointer-events-none z-50 transition-transform"
+                            className="fixed pointer-events-none z-50"
                             style={{
-                                top: ghost.top - ghost.offsetY,
-                                left: ghost.left - ghost.offsetX,
                                 width: ghost.width,
                                 height: ghost.height,
+                                transform: `translate(${ghost.left - ghost.offsetX}px, ${ghost.top - ghost.offsetY}px) scale(1.05)`,
+                                transition: 'transform 0.1s ease-out',
                             }}
                         >
-                            <div className="bg-surface-container rounded-2xl flex items-center gap-4 shadow-2xl ring-2 p-4 scale-105" style={{'--tw-ring-color': timetable[ghost.index].color}}>
+                            <div className="bg-surface-container rounded-2xl flex items-center gap-4 shadow-2xl ring-2 p-4" style={{'--tw-ring-color': timetable[ghost.index].color}}>
                                 <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
                                 <div className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0">
-                                    {timetable[ghost.index].imageUrl ? <img src={timetable[ghost.index].imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                    {timetable[ghost.index].imageUrl ? <FadeInImage src={timetable[ghost.index].imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                                 </div>
                                 <div className="flex-grow font-bold text-lg">{timetable[ghost.index].name}</div>
                             </div>
@@ -628,6 +646,7 @@
                                 isBeingDragged={draggedItemIndex === index}
                                 dropIndicator={dropIndicator}
                                 isColorPickerOpen={openColorPickerId === dj.id}
+                                openColorPickerId={openColorPickerId}
                                 setRef={el => itemRefs.current[index] = el}
                                 onPointerDown={handlePointerDown}
                                 onDragStart={handleDragStart}
@@ -647,44 +666,49 @@
             );
         };
         
-        const BackgroundImage = ({ dj, isFadingOut }) => {
-            if (!dj || !dj.imageUrl || dj.isBuffer) return null;
+        const BackgroundImage = memo(({ dj, isFadingOut }) => {
+            const [isLoaded, setIsLoaded] = useState(false);
+            const shouldShow = dj && dj.imageUrl && !dj.isBuffer;
             
-            const animationClass = isFadingOut ? 'animate-fade-out-from-30' : 'animate-dissolve-in-to-30';
+            useEffect(() => {
+                if (shouldShow) {
+                    const img = new Image();
+                    img.src = dj.imageUrl;
+                    img.onload = () => setIsLoaded(true);
+                } else {
+                    setIsLoaded(false);
+                }
+            }, [dj, shouldShow]);
+
+            if (!shouldShow) return null;
+
+            const animationClass = isFadingOut ? 'animate-fade-out' : 'animate-fade-in';
 
             return (
-                <div key={dj.id} className={`absolute inset-0 -z-20 ${animationClass}`}>
-                    <div className="absolute inset-0 overflow-hidden">
-                        <img src={dj.imageUrl} className="w-full h-full object-cover scale-110" />
+                <div className={`absolute inset-0 -z-20 ${animationClass}`}>
+                    <div className="absolute inset-0 overflow-hidden backdrop-blur-2xl">
+                        <img 
+                          src={dj.imageUrl} 
+                          className={`w-full h-full object-cover scale-110 transition-opacity duration-500 ${isLoaded ? 'opacity-20' : 'opacity-0'}`} 
+                        />
                     </div>
                 </div>
             );
-        };
+        });
 
         const LiveView = ({ timetable, eventConfig, setMode }) => {
             const [now, setNow] = useState(new Date());
             const timelineContainerRef = useRef(null);
             const [containerWidth, setContainerWidth] = useState(0);
+            
+            const [currentDj, setCurrentDj] = useState(null);
+            const [nextDj, setNextDj] = useState(null);
+            const [status, setStatus] = useState('LOADING');
+            const [timeLeft, setTimeLeft] = useState(0);
+            const [progress, setProgress] = useState(0);
+            
             const [bgDj, setBgDj] = useState(null);
             const [prevBgDj, setPrevBgDj] = useState(null);
-
-            useEffect(() => {
-                const timer = setInterval(() => setNow(new Date()), 1000);
-                
-                const updateWidth = () => {
-                    if (timelineContainerRef.current) {
-                        setContainerWidth(timelineContainerRef.current.offsetWidth);
-                    }
-                };
-                updateWidth();
-                window.addEventListener('resize', updateWidth);
-
-                return () => {
-                    clearInterval(timer);
-                    window.removeEventListener('resize', updateWidth);
-                };
-            }, []);
-
 
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
@@ -704,33 +728,71 @@
                 }
                 return scheduleData;
             }, [timetable, eventConfig.startTime]);
-
-            const realTimeIndex = useMemo(() => schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime), [now, schedule]);
             
-            const displayIndex = realTimeIndex;
-
-            const { currentDj, nextDj, timeLeft, progress, status } = useMemo(() => {
-                if (displayIndex === -1) {
-                     const upcomingDj = schedule.find(dj => now < dj.startTime);
-                     if (upcomingDj) return { status: 'UPCOMING', currentDj: upcomingDj, timeLeft: (upcomingDj.startTime - now) / 1000, progress: 0 };
-                     return { status: 'FINISHED' };
-                }
-                const currentDj = schedule[displayIndex];
-                const nextDj = displayIndex < schedule.length - 1 ? schedule[displayIndex + 1] : null;
-                const totalDuration = (currentDj.endTime - currentDj.startTime) / 1000;
-                const timeLeft = (currentDj.endTime - now) / 1000;
-                const progress = totalDuration > 0 ? ((totalDuration - timeLeft) / totalDuration) * 100 : 0;
-                return { currentDj, nextDj, timeLeft, progress, status: 'ON AIR' };
-            }, [displayIndex, now, schedule]);
-            
-            const djToDisplay = status !== 'FINISHED' ? currentDj : null;
-
             useEffect(() => {
-                if (djToDisplay?.id !== bgDj?.id) {
-                    setPrevBgDj(bgDj);
-                    setBgDj(djToDisplay);
+                const timer = setInterval(() => setNow(new Date()), 1000);
+                
+                const updateWidth = () => {
+                    if (timelineContainerRef.current) setContainerWidth(timelineContainerRef.current.offsetWidth);
+                };
+                updateWidth();
+                window.addEventListener('resize', updateWidth);
+
+                return () => {
+                    clearInterval(timer);
+                    window.removeEventListener('resize', updateWidth);
+                };
+            }, []);
+            
+            useEffect(() => {
+                const currentIndex = schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime);
+                
+                let newCurrentDj = null;
+                let newNextDj = null;
+                let newStatus = 'FINISHED';
+
+                if (currentIndex !== -1) {
+                    newStatus = 'ON AIR';
+                    newCurrentDj = schedule[currentIndex];
+                    if (currentIndex < schedule.length - 1) {
+                        newNextDj = schedule[currentIndex + 1];
+                    }
+                } else {
+                    const upcomingDj = schedule.find(dj => now < dj.startTime);
+                    if (upcomingDj) {
+                        newStatus = 'UPCOMING';
+                        newCurrentDj = upcomingDj;
+                    }
                 }
-            }, [djToDisplay]);
+                
+                if (newCurrentDj?.id !== currentDj?.id) {
+                    setCurrentDj(newCurrentDj);
+                    setPrevBgDj(bgDj);
+                    setBgDj(newCurrentDj);
+                }
+                setNextDj(newNextDj);
+                setStatus(newStatus);
+                
+                if (newStatus === 'ON AIR' && newCurrentDj) {
+                    const total = (newCurrentDj.endTime - newCurrentDj.startTime) / 1000;
+                    const remaining = (newCurrentDj.endTime - now) / 1000;
+                    setTimeLeft(remaining);
+                    setProgress(total > 0 ? ((total - remaining) / total) * 100 : 0);
+                } else if (newStatus === 'UPCOMING' && newCurrentDj) {
+                    setTimeLeft((newCurrentDj.startTime - now) / 1000);
+                    setProgress(0);
+                }
+
+            }, [now, schedule, bgDj]);
+            
+            // Preload next DJ's images
+            useEffect(() => {
+                if (nextDj && nextDj.imageUrl) {
+                    const img = new Image();
+                    img.src = nextDj.imageUrl;
+                }
+            }, [nextDj]);
+
 
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
@@ -738,23 +800,17 @@
                 const itemWidth = 256; 
                 const gap = 24; 
                 const step = itemWidth + gap;
-                
                 const centerScreenOffset = containerWidth / 2;
                 const centerItemOffset = itemWidth / 2;
                 
-                let targetIndex = displayIndex;
-
-                if (displayIndex === -1) { 
-                    const upcomingDjIndex = schedule.findIndex(dj => now < dj.startTime);
-                    targetIndex = upcomingDjIndex !== -1 ? upcomingDjIndex : 0;
-                }
+                const currentIndex = schedule.findIndex(dj => dj.id === currentDj?.id);
+                let targetIndex = currentIndex !== -1 ? currentIndex : schedule.findIndex(dj => now < dj.startTime);
+                if (targetIndex === -1) targetIndex = schedule.length -1;
                 
-                const baseOffset = targetIndex * step;
-                const totalOffset = baseOffset;
-                const finalX = centerScreenOffset - centerItemOffset - totalOffset;
+                const finalX = centerScreenOffset - centerItemOffset - (targetIndex * step);
 
                 return `translateX(${finalX}px)`;
-            }, [displayIndex, containerWidth, schedule, now]);
+            }, [currentDj, containerWidth, schedule, now]);
             
             const formatTime = (seconds) => {
                 if (seconds < 0) seconds = 0;
@@ -763,14 +819,13 @@
                 return h > 0 ? `${h}:${timeStr}` : timeStr;
             };
             
+            const djToDisplay = currentDj;
             const bgColorStyle = djToDisplay ? { background: `radial-gradient(ellipse 80% 60% at 50% 120%, ${djToDisplay.color}33, transparent)` } : {};
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
                     <BackgroundImage dj={prevBgDj} isFadingOut={true} />
                     <BackgroundImage dj={bgDj} isFadingOut={false} />
-
-                    <div className="absolute inset-0 -z-10 backdrop-blur-2xl"></div>
 
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
@@ -786,7 +841,7 @@
                                 <main className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-center gap-8">
                                     {!djToDisplay.isBuffer && (
                                         <div className="w-full max-w-sm sm:max-w-md aspect-square bg-surface-container rounded-full shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                                            {djToDisplay.imageUrl ? <img src={djToDisplay.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-1/2 h-1/2 text-on-surface-variant"/>}
+                                            {djToDisplay.imageUrl ? <FadeInImage src={djToDisplay.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-1/2 h-1/2 text-on-surface-variant"/>}
                                         </div>
                                     )}
                                     <div className={`flex flex-col ${djToDisplay.isBuffer ? 'items-center text-center' : 'text-center md:text-left'}`}>
@@ -844,10 +899,10 @@
                     <div ref={timelineContainerRef} className="w-full shrink-0 overflow-hidden mask-gradient z-10 pb-4">
                         <div className="flex h-full items-center gap-6 px-4 py-2" style={{ transform: timelineTransform, transition: 'transform 0.5s ease-in-out' }}>
                             {schedule.map((dj, index) => (
-                                <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${displayIndex === index ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
+                                <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${dj.id === currentDj?.id ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
                                     {!dj.isBuffer && (
                                         <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                            {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                            {dj.imageUrl ? <FadeInImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                                         </div>
                                     )}
                                     <div className="overflow-hidden flex flex-col justify-center">
