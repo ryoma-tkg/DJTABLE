@@ -4,20 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DJ Timekeeper Pro</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel -->
     <script src="https://unpkg.com/core-js-bundle/minified.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=Montserrat:wght@700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDKs -->
     <script type="module">
         // Paste your Firebase configuration object here.
         const firebaseConfig = {
@@ -455,7 +450,7 @@
                              <div className="cursor-grab touch-none" data-drag-handle>
                                 <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
                              </div>
-                            <button onClick={() => setEditingDjIndex(index)} className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all">
+                            <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setEditingDjIndex(index)} className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all">
                                 {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                             </button>
                             <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -949,4 +944,3 @@ const firebaseConfig = {
     </script>
 </body>
 </html>
-
