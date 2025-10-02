@@ -136,13 +136,18 @@
         const FadeInImage = memo(({ src, className, alt = "" }) => {
             const [isLoaded, setIsLoaded] = useState(false);
             useEffect(() => {
-                setIsLoaded(false); // Reset on src change
+                setIsLoaded(false); 
+                if (src) {
+                    const img = new Image();
+                    img.src = src;
+                    img.onload = () => setIsLoaded(true);
+                }
             }, [src]);
+
             return (
                 <img
                     src={src}
                     alt={alt}
-                    onLoad={() => setIsLoaded(true)}
                     className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
             );
@@ -300,7 +305,7 @@
 
             return (
                 <div 
-                    ref={setRef}
+                    ref={el => setRef(index, el)}
                     className="relative"
                     onDragStart={onDragStart}
                 >
@@ -374,7 +379,7 @@
             const [draggedItemIndex, setDraggedItemIndex] = useState(null);
             const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
             const [ghost, setGhost] = useState(null);
-            const itemRefs = useRef([]); 
+            const itemRefs = useRef(new Map()); 
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -422,12 +427,14 @@
             }, []);
             
             const handleEventConfigChange = useCallback((field, value) => {
-                const newConfig = {...eventConfig, [field]: value};
-                setEventConfig(newConfig);
-                if (field === 'startTime') {
-                    setTimetable(prevTimetable => recalculateTimes(prevTimetable, value));
-                }
-            }, [eventConfig, recalculateTimes]);
+                setEventConfig(prevConfig => {
+                    const newConfig = {...prevConfig, [field]: value};
+                    if (field === 'startTime') {
+                        setTimetable(prevTimetable => recalculateTimes(prevTimetable, value));
+                    }
+                    return newConfig;
+                });
+            }, [recalculateTimes]);
             
             const handleUpdate = useCallback((index, field, value) => {
                 setTimetable(prevTimetable => {
@@ -472,7 +479,7 @@
             const handlePointerDown = useCallback((e, index) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
 
-                const draggableItem = itemRefs.current[index];
+                const draggableItem = itemRefs.current.get(index);
                 if (!draggableItem) return;
 
                 draggableItem.setAttribute('draggable', 'true');
@@ -502,17 +509,18 @@
 
                 let targetIndex = -1;
                 let targetPosition = null;
-
-                itemRefs.current.forEach((ref, index) => {
+                
+                for(const [index, ref] of itemRefs.current.entries()) {
                     if (ref) {
                         const rect = ref.getBoundingClientRect();
                         if (clientY >= rect.top && clientY <= rect.bottom) {
                             targetIndex = index;
                             const midY = rect.top + rect.height / 2;
                             targetPosition = clientY < midY ? 'top' : 'bottom';
+                            break; 
                         }
                     }
-                });
+                }
                 
                 if (targetIndex !== -1 && targetIndex !== draggedItemIndex) {
                     setDropIndicator({ index: targetIndex, position: targetPosition });
@@ -524,21 +532,21 @@
             const handlePointerUp = useCallback(() => {
                 if (draggedItemIndex === null) return;
 
-                const draggableElement = itemRefs.current[draggedItemIndex];
-                if(draggableElement) draggableElement.setAttribute('draggable', 'false');
-
                 if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                    setTimetable(prevTimetable => {
-                        const list = [...prevTimetable];
+                     setTimetable(currentTimetable => {
+                        const list = [...currentTimetable];
                         const [itemToMove] = list.splice(draggedItemIndex, 1);
                         
                         let insertAtIndex = dropIndicator.index;
-                        if(draggedItemIndex < dropIndicator.index) {
+                         if (draggedItemIndex < dropIndicator.index) {
                             insertAtIndex = dropIndicator.position === 'top' ? insertAtIndex - 1 : insertAtIndex;
                         } else {
-                            insertAtIndex = dropIndicator.position === 'bottom' ? insertAtIndex + 1 : insertAtIndex;
+                           insertAtIndex = dropIndicator.position === 'bottom' ? insertAtIndex + 1 : insertAtIndex;
                         }
-                        
+                        if(insertAtIndex < 0) insertAtIndex = 0;
+                        if(insertAtIndex > list.length) insertAtIndex = list.length;
+
+
                         list.splice(insertAtIndex, 0, itemToMove);
                         return recalculateTimes(list, eventConfig.startTime);
                     });
@@ -553,6 +561,14 @@
                 const img = new Image();
                 img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
                 e.dataTransfer.setDragImage(img, 0, 0);
+            }, []);
+
+            const setItemRef = useCallback((index, el) => {
+                if (el) {
+                    itemRefs.current.set(index, el);
+                } else {
+                    itemRefs.current.delete(index);
+                }
             }, []);
 
             const eventEnd = timetable.length > 0 ? timetable[timetable.length - 1].endTime : eventConfig.startTime;
@@ -594,7 +610,7 @@
                     {editingDjIndex !== null && (
                         <ImageEditModal 
                             dj={timetable[editingDjIndex]}
-                            onUpdate={handleUpdate}
+                            onUpdate={(field, value) => handleUpdate(editingDjIndex, field, value)}
                             onClose={() => setEditingDjIndex(null)}
                             storage={storage}
                         />
@@ -647,7 +663,7 @@
                                 dropIndicator={dropIndicator}
                                 isColorPickerOpen={openColorPickerId === dj.id}
                                 openColorPickerId={openColorPickerId}
-                                setRef={el => itemRefs.current[index] = el}
+                                setRef={setItemRef}
                                 onPointerDown={handlePointerDown}
                                 onDragStart={handleDragStart}
                                 onEditClick={setEditingDjIndex}
@@ -667,29 +683,15 @@
         };
         
         const BackgroundImage = memo(({ dj, isFadingOut }) => {
-            const [isLoaded, setIsLoaded] = useState(false);
             const shouldShow = dj && dj.imageUrl && !dj.isBuffer;
-            
-            useEffect(() => {
-                if (shouldShow) {
-                    const img = new Image();
-                    img.src = dj.imageUrl;
-                    img.onload = () => setIsLoaded(true);
-                } else {
-                    setIsLoaded(false);
-                }
-            }, [dj, shouldShow]);
-
             if (!shouldShow) return null;
 
-            const animationClass = isFadingOut ? 'animate-fade-out' : 'animate-fade-in';
-
             return (
-                <div className={`absolute inset-0 -z-20 ${animationClass}`}>
+                <div className={`absolute inset-0 -z-20 ${isFadingOut ? 'animate-fade-out' : 'animate-fade-in'}`}>
                     <div className="absolute inset-0 overflow-hidden backdrop-blur-2xl">
-                        <img 
+                        <FadeInImage 
                           src={dj.imageUrl} 
-                          className={`w-full h-full object-cover scale-110 transition-opacity duration-500 ${isLoaded ? 'opacity-20' : 'opacity-0'}`} 
+                          className="w-full h-full object-cover scale-110 opacity-20" 
                         />
                     </div>
                 </div>
@@ -766,10 +768,11 @@
                 }
                 
                 if (newCurrentDj?.id !== currentDj?.id) {
-                    setCurrentDj(newCurrentDj);
-                    setPrevBgDj(bgDj);
+                    setPrevBgDj(currentDj);
                     setBgDj(newCurrentDj);
+                    setCurrentDj(newCurrentDj);
                 }
+                
                 setNextDj(newNextDj);
                 setStatus(newStatus);
                 
@@ -783,7 +786,7 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, bgDj]);
+            }, [now, schedule, currentDj]);
             
             // Preload next DJ's images
             useEffect(() => {
