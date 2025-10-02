@@ -742,7 +742,6 @@
             };
             
             const djToDisplay = currentDj;
-            const isFirstDjUpcoming = status === 'UPCOMING' && schedule.findIndex(dj => dj.id === djToDisplay?.id) === 0;
             const bgColorStyle = (djToDisplay && status === 'ON AIR') ? { background: `radial-gradient(ellipse 80% 60% at 50% 120%, ${djToDisplay.color}33, transparent)` } : {};
             
             return (
@@ -797,7 +796,7 @@
                                  <div className="text-center">
                                      <p className="text-sm text-on-surface-variant font-bold tracking-widest mb-1">FIRST DJ</p>
                                      <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
-                                     <p className="text-4xl md:text-5xl font-mono" style={{color: djToDisplay.color}}>開始まで {formatTime(timeLeft)}</p>
+                                     <p className="text-4xl md:text-5xl font-mono text-amber-400">開始まで {formatTime(timeLeft)}</p>
                                  </div>
                             )}
                             {status === 'FINISHED' && ( <div className="text-center"><h1 className="text-5xl md:text-7xl font-bold">EVENT FINISHED</h1></div> )}
