@@ -361,11 +361,12 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
-            const [draggedIndex, setDraggedIndex] = useState(null);
-            
-            const dragItem = useRef(null);
-            const dragOverItem = useRef(null);
 
+            const [draggedIndex, setDraggedIndex] = useState(null);
+            const [dragOverIndex, setDragOverIndex] = useState(null);
+            
+            const itemRefs = useRef(new Map());
+            
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
                 return () => clearInterval(timer);
@@ -453,25 +454,48 @@
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
             const handleDragStart = (e, index) => {
-                dragItem.current = index;
+                setDraggedIndex(index);
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/html', e.target); // for Firefox
             };
 
-            const handleDragEnter = (e, index) => {
-                dragOverItem.current = index;
-                const list = [...timetable];
-                const draggedItemContent = list[dragItem.current];
-                list.splice(dragItem.current, 1);
-                list.splice(dragOverItem.current, 0, draggedItemContent);
-                dragItem.current = dragOverItem.current;
-                setTimetable(list);
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                if (index !== dragOverIndex) {
+                    setDragOverIndex(index);
+                }
             };
 
-            const handleDragEnd = (e) => {
-                setTimetable(current => recalculateTimes(current, eventConfig.startTime));
-                dragItem.current = null;
-                dragOverItem.current = null;
+            const handleDrop = () => {
+                if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) return;
+                let newTimetable = [...timetable];
+                const [draggedItem] = newTimetable.splice(draggedIndex, 1);
+                newTimetable.splice(dragOverIndex, 0, draggedItem);
+                setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
+            };
+            
+            const handleDragEnd = () => {
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+            };
+            
+            const getTransform = (index) => {
+                if (draggedIndex === null || dragOverIndex === null) return 'translateY(0)';
+                if (index === draggedIndex) return 'translateY(0)'; // The dragged item itself doesn't shift
+
+                const draggedRef = itemRefs.current.get(draggedIndex);
+                if (!draggedRef) return 'translateY(0)';
+                const draggedHeight = draggedRef.offsetHeight + 16; // 1rem for space-y-4
+
+                if (draggedIndex < dragOverIndex) { // Dragging down
+                    if (index > draggedIndex && index <= dragOverIndex) {
+                        return `translateY(-${draggedHeight}px)`;
+                    }
+                } else { // Dragging up
+                    if (index < draggedIndex && index >= dragOverIndex) {
+                        return `translateY(${draggedHeight}px)`;
+                    }
+                }
+                return 'translateY(0)';
             };
 
             return (
@@ -521,12 +545,17 @@
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
+                                ref={el => itemRefs.current.set(index, el)}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, index)}
-                                onDragEnter={(e) => handleDragEnter(e, index)}
+                                onDragOver={(e) => handleDragOver(e, index)}
+                                onDrop={handleDrop}
                                 onDragEnd={handleDragEnd}
-                                onDragOver={(e) => e.preventDefault()}
-                                className="transition-shadow duration-200"
+                                className="transition-transform duration-300 ease-in-out"
+                                style={{
+                                    transform: draggedIndex !== null ? getTransform(index) : 'translateY(0)',
+                                    opacity: draggedIndex === index ? 0.5 : 1
+                                }}
                            >
                                 <DjItem
                                     dj={dj}
