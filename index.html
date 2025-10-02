@@ -362,10 +362,8 @@
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
 
-            const [draggedIndex, setDraggedIndex] = useState(null);
-            const [dragOverIndex, setDragOverIndex] = useState(null);
-            
-            const itemRefs = useRef(new Map());
+            const draggedItem = useRef(null);
+            const dragOverItem = useRef(null);
             
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -452,50 +450,27 @@
                     return recalculateTimes(newTimetable, eventConfig.startTime);
                 });
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
-
-            const handleDragStart = (e, index) => {
-                setDraggedIndex(index);
-                e.dataTransfer.effectAllowed = 'move';
+            
+            const handleDragStart = (e, position) => {
+                draggedItem.current = position;
             };
 
-            const handleDragOver = (e, index) => {
-                e.preventDefault();
-                if (index !== dragOverIndex) {
-                    setDragOverIndex(index);
-                }
+            const handleDragEnter = (e, position) => {
+                dragOverItem.current = position;
             };
 
-            const handleDrop = () => {
-                if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) return;
-                let newTimetable = [...timetable];
-                const [draggedItem] = newTimetable.splice(draggedIndex, 1);
-                newTimetable.splice(dragOverIndex, 0, draggedItem);
+            const handleDrop = (e) => {
+                if (draggedItem.current === null || dragOverItem.current === null) return;
+                
+                const newTimetable = [...timetable];
+                const draggedItemContent = newTimetable[draggedItem.current];
+                newTimetable.splice(draggedItem.current, 1);
+                newTimetable.splice(dragOverItem.current, 0, draggedItemContent);
+                
+                draggedItem.current = null;
+                dragOverItem.current = null;
+                
                 setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
-            };
-            
-            const handleDragEnd = () => {
-                setDraggedIndex(null);
-                setDragOverIndex(null);
-            };
-            
-            const getTransform = (index) => {
-                if (draggedIndex === null || dragOverIndex === null) return 'translateY(0)';
-                if (index === draggedIndex) return 'translateY(0)'; // The dragged item itself doesn't shift
-
-                const draggedRef = itemRefs.current.get(draggedIndex);
-                if (!draggedRef) return 'translateY(0)';
-                const draggedHeight = draggedRef.offsetHeight + 16; // 1rem for space-y-4
-
-                if (draggedIndex < dragOverIndex) { // Dragging down
-                    if (index > draggedIndex && index <= dragOverIndex) {
-                        return `translateY(-${draggedHeight}px)`;
-                    }
-                } else { // Dragging up
-                    if (index < draggedIndex && index >= dragOverIndex) {
-                        return `translateY(${draggedHeight}px)`;
-                    }
-                }
-                return 'translateY(0)';
             };
 
             return (
@@ -541,21 +516,14 @@
                         </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
-                                ref={el => itemRefs.current.set(index, el)}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, index)}
-                                onDragOver={(e) => handleDragOver(e, index)}
-                                onDrop={handleDrop}
-                                onDragEnd={handleDragEnd}
+                                onDragEnter={(e) => handleDragEnter(e, index)}
                                 className="transition-transform duration-300 ease-in-out"
-                                style={{
-                                    transform: draggedIndex !== null ? getTransform(index) : 'translateY(0)',
-                                    opacity: draggedIndex === index ? 0.5 : 1
-                                }}
                            >
                                 <DjItem
                                     dj={dj}
@@ -636,7 +604,10 @@
                     setBackgrounds([{ dj: initialDj, isFadingOut: false }]);
                 }
 
-                return () => clearInterval(timer);
+                return () => {
+                    clearInterval(timer);
+                    window.removeEventListener('resize', updateWidth);
+                };
             }, []);
             
             useEffect(() => {
@@ -687,10 +658,14 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule]);
-            
+            }, [now, schedule, currentDj?.id]);
+
+            // [MODIFIED] Preload next DJ's image
             useEffect(() => {
-                if (nextDj && nextDj.imageUrl) { (new Image()).src = nextDj.imageUrl; }
+                if (nextDj && nextDj.imageUrl) {
+                    const img = new Image();
+                    img.src = nextDj.imageUrl;
+                }
             }, [nextDj]);
 
 
