@@ -92,6 +92,7 @@
             opacity: 0.5;
             transform: scale(1.05);
             background-color: #3f3f46; /* Zinc 700 */
+            outline: none; /* 掴んだ際の枠線を削除 */
         }
     </style>
 </head>
@@ -301,7 +302,7 @@
 
             return (
                 <div
-                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4`}
+                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4 ${ringClass}`}
                     style={{ '--tw-ring-color': isPlaying ? dj.color : 'transparent' }}
                 >
                      <div className="cursor-grab touch-none" onPointerDown={onPointerDown}>
@@ -461,7 +462,9 @@
 
             const handlePointerMove = useCallback((e) => {
                 if (!dragStateRef.current.isDragging) return;
-                const targetEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-dj-index]');
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const targetEl = document.elementFromPoint(clientX, clientY)?.closest('[data-dj-index]');
                 if (!targetEl) return;
                 const targetIndex = parseInt(targetEl.dataset.djIndex, 10);
                 const currentIndex = dragStateRef.current.draggedIndex;
@@ -481,15 +484,22 @@
                 setTimetable(currentTimetable => recalculateTimes(currentTimetable, eventConfig.startTime));
                 setDraggedIndex(null);
                 window.removeEventListener('pointermove', handlePointerMove);
+                window.removeEventListener('touchmove', handlePointerMove);
                 window.removeEventListener('pointerup', handlePointerUp);
+                window.removeEventListener('touchend', handlePointerUp);
             }, [eventConfig.startTime, recalculateTimes, setTimetable, handlePointerMove]);
 
             const handlePointerDown = useCallback((e, index) => {
-                e.preventDefault();
+                // e.preventDefault(); // This can prevent scrolling on touch devices. Let's be more specific.
+                if (e.target.closest('.cursor-grab')) {
+                    e.preventDefault();
+                }
                 setDraggedIndex(index);
                 dragStateRef.current.isDragging = true;
                 window.addEventListener('pointermove', handlePointerMove);
+                window.addEventListener('touchmove', handlePointerMove);
                 window.addEventListener('pointerup', handlePointerUp);
+                window.addEventListener('touchend', handlePointerUp);
             }, [handlePointerMove, handlePointerUp]);
 
             const toggleGodMode = () => {
@@ -563,7 +573,7 @@
                            <div
                                 key={dj.id}
                                 data-dj-index={index}
-                                className={`transition-all duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
+                                className={`transition-transform duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
                            >
                                 <DjItem
                                     dj={dj}
@@ -597,7 +607,7 @@
                     <div className="absolute inset-0 overflow-hidden">
                         <img 
                           src={dj.imageUrl} 
-                          className="w-full h-full object-cover scale-110 opacity-20 blur-2xl"
+                          className="w-full h-full object-cover scale-110 opacity-25 blur-xl"
                         />
                     </div>
                 </div>
@@ -633,7 +643,7 @@
                 };
                 loadImages();
                 return () => { isCancelled = true; };
-            }, [JSON.stringify(urls)]); // Use JSON.stringify for deep comparison
+            }, [JSON.stringify(urls)]);
             return loaded;
         };
 
@@ -650,7 +660,6 @@
             
             const [backgroundDj, setBackgroundDj] = useState(null);
             const [fadingOutDj, setFadingOutDj] = useState(null);
-            const backgroundTimeoutRef = useRef(null);
 
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
@@ -668,17 +677,14 @@
             
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
-                
                 const updateWidth = () => {
                     if (timelineContainerRef.current) setContainerWidth(timelineContainerRef.current.offsetWidth);
                 };
                 updateWidth();
                 window.addEventListener('resize', updateWidth);
-                
                 return () => {
                     clearInterval(timer);
                     window.removeEventListener('resize', updateWidth);
-                    if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
                 };
             }, []);
             
@@ -686,68 +692,79 @@
                 const currentIndex = schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime);
                 
                 let newCurrentDj = null;
-                let newNextDj = null;
-                let newStatus = 'FINISHED';
+                if (currentIndex !== -1) {
+                    newCurrentDj = schedule[currentIndex];
+                } else {
+                    const upcomingDj = schedule.find(dj => now < dj.startTime);
+                    if (upcomingDj) newCurrentDj = upcomingDj;
+                }
+                
+                if (newCurrentDj?.id !== currentDj?.id) {
+                    setCurrentDj(newCurrentDj);
+                }
 
                 if (currentIndex !== -1) {
-                    newStatus = 'ON AIR';
-                    newCurrentDj = schedule[currentIndex];
-                    if (currentIndex < schedule.length - 1) newNextDj = schedule[currentIndex + 1];
+                    setStatus('ON AIR');
+                    if (currentIndex < schedule.length - 1) setNextDj(schedule[currentIndex + 1]);
+                    else setNextDj(null);
+                    
+                    const total = (schedule[currentIndex].endTime - schedule[currentIndex].startTime) / 1000;
+                    const remaining = (schedule[currentIndex].endTime - now) / 1000;
+                    setTimeLeft(remaining);
+                    setProgress(total > 0 ? ((total - remaining) / total) * 100 : 0);
                 } else {
                     const upcomingDj = schedule.find(dj => now < dj.startTime);
                     if (upcomingDj) {
-                        newStatus = 'UPCOMING';
-                        newCurrentDj = upcomingDj;
+                        setStatus('UPCOMING');
+                        setTimeLeft((upcomingDj.startTime - now) / 1000);
+                        setNextDj(schedule[0]);
+                    } else {
+                        setStatus('FINISHED');
                     }
-                }
-                
-                if (newCurrentDj?.id !== currentDj?.id || newStatus !== status) {
-                     setCurrentDj(newCurrentDj);
-                     
-                     if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
-
-                     setFadingOutDj(backgroundDj);
-                     setBackgroundDj(null);
-                     
-                     const hasNewImage = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
-                     
-                     if (newStatus === 'ON AIR') {
-                         backgroundTimeoutRef.current = setTimeout(() => {
-                            if(hasNewImage) setBackgroundDj(newCurrentDj);
-                            setFadingOutDj(null);
-                         }, 1500);
-                     } else {
-                        setFadingOutDj(null);
-                     }
-                }
-                
-                setNextDj(newNextDj);
-                setStatus(newStatus);
-                
-                if (newStatus === 'ON AIR' && newCurrentDj) {
-                    const total = (newCurrentDj.endTime - newCurrentDj.startTime) / 1000;
-                    const remaining = (newCurrentDj.endTime - now) / 1000;
-                    setTimeLeft(remaining);
-                    setProgress(total > 0 ? ((total - remaining) / total) * 100 : 0);
-                } else if (newStatus === 'UPCOMING' && newCurrentDj) {
-                    setTimeLeft((newCurrentDj.startTime - now) / 1000);
                     setProgress(0);
                 }
+            }, [now, schedule, currentDj]);
 
-            }, [now, schedule, currentDj?.id, status]);
+            useEffect(() => {
+                const newBgCandidate = (status === 'ON AIR' && currentDj && currentDj.imageUrl && !currentDj.isBuffer) ? currentDj : null;
+
+                if (backgroundDj?.id === newBgCandidate?.id) return;
+
+                if (backgroundDj) {
+                    setFadingOutDj(backgroundDj);
+                }
+                setBackgroundDj(null);
+
+                if (newBgCandidate) {
+                    const img = new Image();
+                    img.src = newBgCandidate.imageUrl;
+                    img.onload = () => {
+                        setBackgroundDj(newBgCandidate);
+                        setTimeout(() => setFadingOutDj(null), 1500); 
+                    };
+                    img.onerror = () => {
+                        console.error("Background image could not be loaded.");
+                        setTimeout(() => setFadingOutDj(null), 1500);
+                    };
+                } else {
+                    setTimeout(() => setFadingOutDj(null), 1500);
+                }
+            }, [currentDj, status]);
 
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
                 const itemWidth = 256, gap = 24, step = itemWidth + gap;
                 const centerScreenOffset = containerWidth / 2, centerItemOffset = itemWidth / 2;
+                
                 let targetIndex = schedule.findIndex(dj => dj.id === currentDj?.id);
-                if (status === 'UPCOMING' || targetIndex === -1) {
-                    targetIndex = schedule.findIndex(dj => now < dj.startTime) ?? schedule.length - 1;
+                if (targetIndex === -1) {
+                    if (status === 'FINISHED') targetIndex = schedule.length -1;
+                    else targetIndex = 0;
                 }
 
                 const finalX = centerScreenOffset - centerItemOffset - (targetIndex * step);
                 return `translateX(${finalX}px)`;
-            }, [currentDj, containerWidth, schedule, now, status]);
+            }, [currentDj, containerWidth, schedule, status]);
             
             const formatTime = (seconds) => {
                 if (seconds < 0) seconds = 0;
@@ -868,7 +885,7 @@
                         console.warn("Connection to Firebase timed out. Entering offline mode.");
                         setAppStatus('offline');
                     }
-                }, 5000); // 5 second timeout
+                }, 5000);
 
                 try {
                     const app = initializeApp(window.firebaseConfig);
@@ -913,7 +930,7 @@
                     }
                 }, (error) => {
                     console.error("Firestore snapshot error:", error);
-                    setAppStatus('offline'); // Enter offline mode on snapshot error
+                    setAppStatus('offline');
                 });
 
                 return () => unsubscribe();
@@ -931,7 +948,7 @@
             }, [timetable, eventConfig, isAuthenticated, appStatus]);
 
             useEffect(() => {
-                if (appStatus === 'online' && !isInitialLoading) { // Avoid saving initial empty state
+                if (appStatus === 'online' && !isInitialLoading) {
                     const handler = setTimeout(() => {
                         saveDataToFirestore();
                     }, 1000);
