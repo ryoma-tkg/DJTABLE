@@ -123,7 +123,7 @@
 
         // --- Icon Components ---
         const PlayIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>);
-        const PlusIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
+        const PlusIcon = ({className}) => (<svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
         const TrashIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>);
         const GripIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>);
         const UserIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>);
@@ -287,11 +287,13 @@
         };
         
         const DjItem = memo(({ 
-            dj, index, isPlaying, isBeingDragged, dropIndicator, isColorPickerOpen, openColorPickerId,
-            setRef, onPointerDown, onDragStart, onEditClick, onUpdate, onColorPickerToggle, onCopy, onRemove
+            dj, index, isPlaying, dragState,
+            setRef, onPointerDown, onEditClick, onUpdate, onColorPickerToggle, onCopy, onRemove
         }) => {
             const colorPickerRef = useRef(null);
-            
+            const { isDragging, isDraggedOver, dropPosition } = dragState;
+            const isColorPickerOpen = dragState.openColorPickerId === dj.id;
+
             useEffect(() => {
                 const handleClickOutside = (event) => {
                     const target = event.target;
@@ -304,24 +306,20 @@
             }, [isColorPickerOpen, dj.id, onColorPickerToggle]);
 
             return (
-                <div 
-                    ref={el => setRef(index, el)}
-                    className="relative"
-                    onDragStart={onDragStart}
-                >
-                    {dropIndicator.index === index && dropIndicator.position === 'top' && (
+                <div ref={el => setRef(index, el)} className="relative">
+                    {isDraggedOver && dropPosition === 'top' && (
                         <div className="absolute -top-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
                     )}
                     
                     <div
                         className={`
-                            bg-surface-container rounded-2xl flex items-center gap-4 transition-shadow duration-300 shadow-lg p-4
-                            ${isBeingDragged ? 'opacity-0' : 'opacity-100'}
+                            bg-surface-container rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-lg p-4
+                            ${isDragging ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}
                             ${isPlaying ? 'ring-2 shadow-[0_0_12px_var(--tw-ring-color)]' : 'ring-1'}
                         `}
                         style={{ '--tw-ring-color': isPlaying ? dj.color : (dj.color + '99') }}
                     >
-                         <div className="cursor-grab touch-none" data-drag-handle onPointerDown={(e) => onPointerDown(e, index)}>
+                         <div className="cursor-grab touch-none" onPointerDown={(e) => onPointerDown(e, index)}>
                             <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
                          </div>
                         <button 
@@ -351,7 +349,7 @@
                         </div>
                         <div className="flex flex-col gap-2 shrink-0 self-center">
                             <div className="relative" ref={colorPickerRef}>
-                                <button type="button" data-color-picker-trigger={dj.id} onClick={() => onColorPickerToggle(dj.id === openColorPickerId ? null : dj.id)} className="w-9 h-9 rounded-full ring-2 ring-on-surface-variant" style={{ backgroundColor: dj.color }}/>
+                                <button type="button" data-color-picker-trigger={dj.id} onClick={() => onColorPickerToggle(dj.id === dragState.openColorPickerId ? null : dj.id)} className="w-9 h-9 rounded-full ring-2 ring-on-surface-variant" style={{ backgroundColor: dj.color }}/>
                                 {isColorPickerOpen && (
                                     <div className="absolute w-40 bottom-full mb-2 right-0 bg-surface-background p-2 rounded-lg shadow-2xl grid grid-cols-4 gap-2 z-10">
                                         {VIVID_COLORS.map(color => (<button key={color} type="button" onClick={() => { onUpdate(index, 'color', color); onColorPickerToggle(null); }} className="w-8 h-8 rounded-full transition-transform hover:scale-110 focus:outline-none ring-1 ring-black/20" style={{ backgroundColor: color }} />))}
@@ -363,7 +361,7 @@
                         </div>
                     </div>
 
-                    {dropIndicator.index === index && dropIndicator.position === 'bottom' && (
+                    {isDraggedOver && dropPosition === 'bottom' && (
                         <div className="absolute -bottom-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
                     )}
                 </div>
@@ -375,11 +373,18 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
-            
-            const [draggedItemIndex, setDraggedItemIndex] = useState(null);
-            const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
-            const [ghost, setGhost] = useState(null);
+
+            const dragStateRef = useRef({
+                draggedIndex: null,
+                draggedOverIndex: null,
+                dropPosition: null,
+                isDragging: false,
+                initialY: 0,
+                offsetY: 0,
+            });
+            const listRef = useRef(null);
             const itemRefs = useRef(new Map()); 
+            const [ignored, forceUpdate] = useState(0); // For re-rendering on drag state change
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -434,7 +439,7 @@
                     }
                     return newConfig;
                 });
-            }, [recalculateTimes]);
+            }, [recalculateTimes, setTimetable, setEventConfig]);
             
             const handleUpdate = useCallback((index, field, value) => {
                 setTimetable(prevTimetable => {
@@ -445,7 +450,7 @@
                      }
                     return newTimetable;
                 });
-            }, [eventConfig.startTime, recalculateTimes]);
+            }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
             const addNewDj = useCallback((isBuffer = false) => {
                 setTimetable(prevTimetable => {
@@ -454,7 +459,7 @@
                     const newDjData = { id: Date.now(), name: isBuffer ? 'バッファー' : `DJ ${prevTimetable.filter(d => !d.isBuffer).length + 1}`, duration: duration, imageUrl: '', color: VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)], isBuffer, };
                     return recalculateTimes([...prevTimetable, newDjData], eventConfig.startTime);
                 });
-            }, [eventConfig.startTime, recalculateTimes]);
+            }, [eventConfig.startTime, recalculateTimes, setTimetable]);
             
             const executeReset = useCallback(() => {
                 setTimetable([]);
@@ -463,9 +468,9 @@
                     startTime: '22:00'
                 });
                 setIsResetConfirmOpen(false);
-            }, []);
+            }, [setTimetable, setEventConfig]);
 
-            const handleRemoveDj = useCallback((index) => setTimetable(prevTimetable => recalculateTimes(prevTimetable.filter((_, i) => i !== index), eventConfig.startTime)), [eventConfig.startTime, recalculateTimes]);
+            const handleRemoveDj = useCallback((index) => setTimetable(prevTimetable => recalculateTimes(prevTimetable.filter((_, i) => i !== index), eventConfig.startTime)), [eventConfig.startTime, recalculateTimes, setTimetable]);
             
             const handleCopyDj = useCallback((index) => {
                 setTimetable(prevTimetable => {
@@ -474,94 +479,91 @@
                     newTimetable.splice(index + 1, 0, djToCopy);
                     return recalculateTimes(newTimetable, eventConfig.startTime);
                 });
-            }, [eventConfig.startTime, recalculateTimes]);
+            }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
             const handlePointerDown = useCallback((e, index) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
-
-                const draggableItem = itemRefs.current.get(index);
-                if (!draggableItem) return;
-
-                draggableItem.setAttribute('draggable', 'true');
-                setDraggedItemIndex(index);
                 
-                const rect = draggableItem.getBoundingClientRect();
-                const clientX = e.clientX ?? e.touches[0].clientX;
-                const clientY = e.clientY ?? e.touches[0].clientY;
+                e.target.setPointerCapture(e.pointerId);
+
+                const dragState = dragStateRef.current;
+                dragState.draggedIndex = index;
+                dragState.isDragging = true;
+                dragState.initialY = e.clientY;
+                dragState.offsetY = e.clientY - itemRefs.current.get(index).getBoundingClientRect().top;
                 
-                setGhost({
-                    index,
-                    width: rect.width,
-                    height: rect.height,
-                    top: clientY,
-                    left: clientX,
-                    offsetX: clientX - rect.left,
-                    offsetY: clientY - rect.top,
-                });
+                forceUpdate(c => c + 1);
+                
+                window.addEventListener('pointermove', handlePointerMove);
+                window.addEventListener('pointerup', handlePointerUp);
             }, []);
-            
+
             const handlePointerMove = useCallback((e) => {
-                if (draggedItemIndex === null) return;
-                const clientX = e.clientX ?? e.touches[0].clientX;
-                const clientY = e.clientY ?? e.touches[0].clientY;
-
-                setGhost(g => g ? ({ ...g, top: clientY, left: clientX }) : null);
-
-                let targetIndex = -1;
-                let targetPosition = null;
+                const dragState = dragStateRef.current;
+                if (!dragState.isDragging || dragState.draggedIndex === null) return;
                 
-                for(const [index, ref] of itemRefs.current.entries()) {
+                const clientY = e.clientY;
+                dragState.offsetY = clientY - dragState.initialY;
+
+                let newDraggedOverIndex = null;
+                let newDropPosition = null;
+
+                for (const [index, ref] of itemRefs.current.entries()) {
                     if (ref) {
                         const rect = ref.getBoundingClientRect();
+                        const midY = rect.top + rect.height / 2;
                         if (clientY >= rect.top && clientY <= rect.bottom) {
-                            targetIndex = index;
-                            const midY = rect.top + rect.height / 2;
-                            targetPosition = clientY < midY ? 'top' : 'bottom';
-                            break; 
+                           newDraggedOverIndex = index;
+                           newDropPosition = clientY < midY ? 'top' : 'bottom';
+                           break;
                         }
                     }
                 }
                 
-                if (targetIndex !== -1 && targetIndex !== draggedItemIndex) {
-                    setDropIndicator({ index: targetIndex, position: targetPosition });
-                } else {
-                    setDropIndicator({ index: null, position: null });
+                if (dragState.draggedOverIndex !== newDraggedOverIndex || dragState.dropPosition !== newDropPosition) {
+                    dragState.draggedOverIndex = newDraggedOverIndex;
+                    dragState.dropPosition = newDropPosition;
+                    forceUpdate(c => c + 1);
                 }
-            }, [draggedItemIndex]);
-            
-            const handlePointerUp = useCallback(() => {
-                if (draggedItemIndex === null) return;
+            }, []);
 
-                if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                     setTimetable(currentTimetable => {
+            const handlePointerUp = useCallback((e) => {
+                window.removeEventListener('pointermove', handlePointerMove);
+                window.removeEventListener('pointerup', handlePointerUp);
+
+                const dragState = dragStateRef.current;
+                const { draggedIndex, draggedOverIndex, dropPosition } = dragState;
+
+                if (draggedIndex !== null && draggedOverIndex !== null && draggedIndex !== draggedOverIndex) {
+                    setTimetable(currentTimetable => {
                         const list = [...currentTimetable];
-                        const [itemToMove] = list.splice(draggedItemIndex, 1);
+                        const [itemToMove] = list.splice(draggedIndex, 1);
                         
-                        let insertAtIndex = dropIndicator.index;
-                         if (draggedItemIndex < dropIndicator.index) {
-                            insertAtIndex = dropIndicator.position === 'top' ? insertAtIndex - 1 : insertAtIndex;
-                        } else {
-                           insertAtIndex = dropIndicator.position === 'bottom' ? insertAtIndex + 1 : insertAtIndex;
+                        let insertAtIndex = draggedOverIndex;
+                        if (draggedIndex < draggedOverIndex) { // moving down
+                           if(dropPosition === 'bottom') insertAtIndex++;
+                        } else { // moving up
+                            if(dropPosition === 'top') insertAtIndex--;
                         }
-                        if(insertAtIndex < 0) insertAtIndex = 0;
-                        if(insertAtIndex > list.length) insertAtIndex = list.length;
 
+                        // Adjust index if moving down
+                        if (draggedIndex < draggedOverIndex) {
+                            insertAtIndex--;
+                        }
 
                         list.splice(insertAtIndex, 0, itemToMove);
                         return recalculateTimes(list, eventConfig.startTime);
                     });
                 }
                 
-                setDraggedItemIndex(null);
-                setDropIndicator({ index: null, position: null });
-                setGhost(null);
-            }, [draggedItemIndex, dropIndicator, eventConfig.startTime, recalculateTimes]);
-            
-            const handleDragStart = useCallback((e) => {
-                const img = new Image();
-                img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                e.dataTransfer.setDragImage(img, 0, 0);
-            }, []);
+                dragState.isDragging = false;
+                dragState.draggedIndex = null;
+                dragState.draggedOverIndex = null;
+                dragState.dropPosition = null;
+                dragState.offsetY = 0;
+                
+                forceUpdate(c => c + 1);
+            }, [recalculateTimes, eventConfig.startTime, setTimetable]);
 
             const setItemRef = useCallback((index, el) => {
                 if (el) {
@@ -570,36 +572,11 @@
                     itemRefs.current.delete(index);
                 }
             }, []);
-
-            const eventEnd = timetable.length > 0 ? timetable[timetable.length - 1].endTime : eventConfig.startTime;
+            
+            const eventEnd = timetable.length > 0 ? schedule[schedule.length-1].endTime.toTimeString().slice(0, 5) : eventConfig.startTime;
             
             return (
-                <div 
-                    className="p-4 md:p-8 max-w-4xl mx-auto" 
-                    onPointerMove={handlePointerMove} 
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
-                >
-                    {ghost && timetable[ghost.index] && (
-                        <div
-                            className="fixed pointer-events-none z-50"
-                            style={{
-                                width: ghost.width,
-                                height: ghost.height,
-                                transform: `translate(${ghost.left - ghost.offsetX}px, ${ghost.top - ghost.offsetY}px) scale(1.05)`,
-                                transition: 'transform 0.1s ease-out',
-                            }}
-                        >
-                            <div className="bg-surface-container rounded-2xl flex items-center gap-4 shadow-2xl ring-2 p-4" style={{'--tw-ring-color': timetable[ghost.index].color}}>
-                                <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
-                                <div className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0">
-                                    {timetable[ghost.index].imageUrl ? <FadeInImage src={timetable[ghost.index].imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
-                                </div>
-                                <div className="flex-grow font-bold text-lg">{timetable[ghost.index].name}</div>
-                            </div>
-                        </div>
-                    )}
-
+                <div className="p-4 md:p-8 max-w-4xl mx-auto">
                     <ConfirmModal
                         isOpen={isResetConfirmOpen}
                         title="タイムテーブルをリセット"
@@ -651,28 +628,33 @@
                         </div>
                     </div>
 
-
-                    <div className="space-y-4" >
-                        {timetable.map((dj, index) => (
-                           <DjItem 
-                                key={dj.id}
-                                dj={dj} 
-                                index={index} 
-                                isPlaying={currentlyPlayingIndex === index}
-                                isBeingDragged={draggedItemIndex === index}
-                                dropIndicator={dropIndicator}
-                                isColorPickerOpen={openColorPickerId === dj.id}
-                                openColorPickerId={openColorPickerId}
-                                setRef={setItemRef}
-                                onPointerDown={handlePointerDown}
-                                onDragStart={handleDragStart}
-                                onEditClick={setEditingDjIndex}
-                                onUpdate={handleUpdate}
-                                onColorPickerToggle={setOpenColorPickerId}
-                                onCopy={handleCopyDj}
-                                onRemove={handleRemoveDj}
-                           />
-                        ))}
+                    <div className="space-y-4" ref={listRef}>
+                         {timetable.map((dj, index) => {
+                            const isDragging = dragStateRef.current.draggedIndex === index;
+                            const isDraggedOver = dragStateRef.current.draggedOverIndex === index;
+                            
+                            return (
+                               <DjItem 
+                                    key={dj.id}
+                                    dj={dj} 
+                                    index={index} 
+                                    isPlaying={currentlyPlayingIndex === index}
+                                    dragState={{
+                                        isDragging,
+                                        isDraggedOver,
+                                        dropPosition: isDraggedOver ? dragStateRef.current.dropPosition : null,
+                                        openColorPickerId
+                                    }}
+                                    setRef={setItemRef}
+                                    onPointerDown={handlePointerDown}
+                                    onEditClick={setEditingDjIndex}
+                                    onUpdate={handleUpdate}
+                                    onColorPickerToggle={setOpenColorPickerId}
+                                    onCopy={handleCopyDj}
+                                    onRemove={handleRemoveDj}
+                               />
+                            )
+                         })}
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row gap-4">
                         <button onClick={() => addNewDj(false)} className="w-full flex items-center justify-center bg-brand-primary hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-opacity duration-200"><PlusIcon className="w-5 h-5 mr-2"/><span>DJを追加</span></button>
@@ -682,14 +664,13 @@
             );
         };
         
-        const BackgroundImage = memo(({ dj, isFadingOut }) => {
-            const shouldShow = dj && dj.imageUrl && !dj.isBuffer;
-            if (!shouldShow) return null;
+        const BackgroundImage = memo(({ dj, status }) => {
+            if (!dj || !dj.imageUrl || dj.isBuffer) return null;
 
             return (
-                <div className={`absolute inset-0 -z-20 ${isFadingOut ? 'animate-fade-out' : 'animate-fade-in'}`}>
+                <div className={`absolute inset-0 -z-20 transition-opacity duration-[1500ms] ${status === 'visible' ? 'opacity-100' : 'opacity-0'}`}>
                     <div className="absolute inset-0 overflow-hidden backdrop-blur-2xl">
-                        <FadeInImage 
+                        <img 
                           src={dj.imageUrl} 
                           className="w-full h-full object-cover scale-110 opacity-20" 
                         />
@@ -709,9 +690,8 @@
             const [timeLeft, setTimeLeft] = useState(0);
             const [progress, setProgress] = useState(0);
             
-            const [bgDj, setBgDj] = useState(null);
-            const [prevBgDj, setPrevBgDj] = useState(null);
-
+            const [backgrounds, setBackgrounds] = useState([]);
+            
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
                 const scheduleData = [];
@@ -768,9 +748,15 @@
                 }
                 
                 if (newCurrentDj?.id !== currentDj?.id) {
-                    setPrevBgDj(currentDj);
-                    setBgDj(newCurrentDj);
-                    setCurrentDj(newCurrentDj);
+                     setCurrentDj(newCurrentDj);
+
+                     setBackgrounds(prevBgs => {
+                        const newBgs = prevBgs.map(bg => ({ ...bg, status: 'hidden' }));
+                        if (newCurrentDj) {
+                           return [...newBgs, { dj: newCurrentDj, status: 'visible' }];
+                        }
+                        return newBgs;
+                     });
                 }
                 
                 setNextDj(newNextDj);
@@ -827,9 +813,10 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    <BackgroundImage dj={prevBgDj} isFadingOut={true} />
-                    <BackgroundImage dj={bgDj} isFadingOut={false} />
-
+                    {backgrounds.map(({ dj, status }) => (
+                       <BackgroundImage key={dj.id} dj={dj} status={status} />
+                    ))}
+                    
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
                            <div className="bg-black/30 backdrop-blur-sm text-on-surface font-bold py-2 px-4 rounded-full text-2xl tracking-wider font-mono text-center w-[10ch]">
