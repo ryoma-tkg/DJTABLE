@@ -142,28 +142,33 @@
         const ResetIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>);
         const AlertTriangleIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>);
 
+        const SimpleImage = memo(({ src, className, alt = "" }) => {
+            if (!src) return null;
+            return <img src={src} alt={alt} className={className} />;
+        });
+
         const FadeInImage = memo(({ src, className, alt = "" }) => {
             const [isLoaded, setIsLoaded] = useState(false);
             useEffect(() => {
-                setIsLoaded(false); 
                 if (src) {
                     const img = new Image();
                     img.src = src;
                     img.onload = () => setIsLoaded(true);
+                } else {
+                     setIsLoaded(true);
                 }
             }, [src]);
 
             return (
-                <img
-                    src={src}
-                    alt={alt}
-                    className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
-                />
+                <div className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+                    {src ? <img src={src} alt={alt} className="w-full h-full object-cover" /> : <UserIcon className="w-1/2 h-1/2 text-on-surface-variant"/> }
+                </div>
             );
         });
 
         const parseTime = (timeStr) => {
             const date = new Date();
+            if (!timeStr) return date;
             const [hours, minutes] = timeStr.split(':').map(Number);
             date.setHours(hours, minutes, 0, 0);
             return date;
@@ -231,7 +236,7 @@
                         </div>
                         <div className="flex items-center justify-center my-6">
                             <div className="w-40 h-40 rounded-full bg-surface-background flex items-center justify-center overflow-hidden">
-                                {imageUrl ? <FadeInImage src={imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-20 h-20 text-on-surface-variant"/>}
+                                {imageUrl ? <SimpleImage src={imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-20 h-20 text-on-surface-variant"/>}
                             </div>
                         </div>
                         <div className="space-y-4">
@@ -324,7 +329,7 @@
                         onPointerDown={(e) => e.stopPropagation()}
                         className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
                     >
-                        {dj.imageUrl ? <FadeInImage src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                        {dj.imageUrl ? <SimpleImage src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                     </button>
                     <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                         <div className="flex flex-col">
@@ -387,6 +392,11 @@
                 }
                 return scheduleData;
             }, [timetable, eventConfig.startTime]);
+
+            const eventEndTime = useMemo(() => {
+                if (schedule.length === 0) return null;
+                return schedule[schedule.length - 1].endTime.toTimeString().slice(0, 5);
+            }, [schedule]);
 
             const currentlyPlayingIndex = useMemo(() => schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime), [now, schedule]);
 
@@ -498,15 +508,22 @@
                             storage={storage}
                         />
                     )}
-                    <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                        <input 
-                            type="text" 
-                            value={eventConfig.title || 'DJ Timekeeper Pro'}
-                            onChange={(e) => handleEventConfigChange('title', e.target.value)}
-                            className="text-3xl font-bold text-brand-secondary tracking-wide bg-transparent focus:outline-none focus:bg-surface-container/50 rounded-lg p-2 w-full sm:w-auto"
-                            placeholder="イベントタイトル"
-                        />
-                        <div className="flex gap-2 w-full sm:w-auto">
+                    <header className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
+                        <div className="flex flex-col gap-2">
+                             <input 
+                                type="text" 
+                                value={eventConfig.title || 'DJ Timekeeper Pro'}
+                                onChange={(e) => handleEventConfigChange('title', e.target.value)}
+                                className="text-3xl font-bold text-brand-secondary tracking-wide bg-transparent focus:outline-none focus:bg-surface-container/50 rounded-lg p-2 w-full sm:w-auto"
+                                placeholder="イベントタイトル"
+                            />
+                            {eventEndTime && (
+                                 <div className="bg-surface-container/50 text-on-surface-variant font-semibold py-2 px-4 rounded-full text-lg tracking-wider font-mono text-center">
+                                    {eventConfig.startTime} - {eventEndTime}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex gap-2 w-full sm:w-auto self-center">
                             <button onClick={() => setIsResetConfirmOpen(true)} title="すべてリセット" className="flex items-center justify-center p-3.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-full transition-colors">
                                 <ResetIcon className="w-5 h-5"/>
                             </button>
@@ -575,14 +592,15 @@
             useEffect(() => {
                 let isCancelled = false;
                 const loadImages = async () => {
-                    if (!urls || urls.length === 0) {
+                    const filteredUrls = urls.filter(Boolean);
+                    if (filteredUrls.length === 0) {
                         setLoaded(true);
                         return;
                     }
                     try {
                         await Promise.all(
-                            urls.map(url => {
-                                return new Promise((resolve, reject) => {
+                            filteredUrls.map(url => {
+                                return new Promise((resolve) => {
                                     const img = new Image();
                                     img.src = url;
                                     img.onload = resolve;
@@ -613,8 +631,10 @@
             const [timeLeft, setTimeLeft] = useState(0);
             const [progress, setProgress] = useState(0);
             
-            const [backgrounds, setBackgrounds] = useState([]);
-            
+            const [backgroundDj, setBackgroundDj] = useState(null);
+            const [fadingOutDj, setFadingOutDj] = useState(null);
+            const backgroundTimeoutRef = useRef(null);
+
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
                 const scheduleData = [];
@@ -640,12 +660,14 @@
                 
                 const initialDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime);
                 if (initialDj) {
-                    setBackgrounds([{ dj: initialDj, isFadingOut: false }]);
+                    setCurrentDj(initialDj);
+                    setBackgroundDj(initialDj);
                 }
 
                 return () => {
                     clearInterval(timer);
                     window.removeEventListener('resize', updateWidth);
+                    if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
                 };
             }, []);
             
@@ -671,17 +693,14 @@
                 if (newCurrentDj?.id !== currentDj?.id) {
                      setCurrentDj(newCurrentDj);
                      
-                     setBackgrounds(prevBgs => {
-                         const newBgs = prevBgs.map(bg => ({ ...bg, isFadingOut: true }));
-                         if (newCurrentDj) {
-                            newBgs.push({ dj: newCurrentDj, isFadingOut: false });
-                         }
-                         return newBgs;
-                     });
+                     if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
 
-                     setTimeout(() => {
-                        setBackgrounds(currentBgs => currentBgs.filter(bg => !bg.isFadingOut));
-                     }, 1500);
+                     if(backgroundDj) setFadingOutDj(backgroundDj);
+                     
+                     backgroundTimeoutRef.current = setTimeout(() => {
+                        setBackgroundDj(newCurrentDj);
+                        setFadingOutDj(null); 
+                     }, 1000);
                 }
                 
                 setNextDj(newNextDj);
@@ -697,7 +716,7 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, currentDj?.id]);
+            }, [now, schedule, currentDj?.id, backgroundDj]);
 
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
@@ -719,7 +738,8 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    {backgrounds.map(bg => <BackgroundImage key={bg.dj.id} dj={bg.dj} isFadingOut={bg.isFadingOut} />)}
+                    {fadingOutDj && <BackgroundImage key={`fadeout-${fadingOutDj.id}`} dj={fadingOutDj} isFadingOut={true} />}
+                    {backgroundDj && <BackgroundImage key={`bg-${backgroundDj.id}`} dj={backgroundDj} isFadingOut={false} />}
                     
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
@@ -735,7 +755,7 @@
                                 <main className="w-full max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-center gap-8">
                                     {!djToDisplay.isBuffer && (
                                         <div className="w-full max-w-sm sm:max-w-md aspect-square bg-surface-container rounded-full shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                                            {djToDisplay.imageUrl ? <FadeInImage src={djToDisplay.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-1/2 h-1/2 text-on-surface-variant"/>}
+                                           <FadeInImage src={djToDisplay.imageUrl} className="w-full h-full" />
                                         </div>
                                     )}
                                     <div className={`flex flex-col ${djToDisplay.isBuffer ? 'items-center text-center' : 'text-center md:text-left'}`}>
@@ -781,7 +801,7 @@
                                 <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${dj.id === currentDj?.id ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
                                     {!dj.isBuffer && (
                                         <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                            {dj.imageUrl ? <FadeInImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                            {dj.imageUrl ? <SimpleImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
                                         </div>
                                     )}
                                     <div className="overflow-hidden flex flex-col justify-center">
@@ -806,7 +826,7 @@
             const dbRef = useRef(null);
             const storageRef = useRef(null);
             
-            const imageUrlsToPreload = useMemo(() => timetable.map(dj => dj.imageUrl).filter(Boolean), [timetable]);
+            const imageUrlsToPreload = useMemo(() => timetable.map(dj => dj.imageUrl), [timetable]);
             const imagesLoaded = useImagePreloader(imageUrlsToPreload);
 
             useEffect(() => {
@@ -887,24 +907,24 @@
             }, [timetable, eventConfig, isAuthenticated, appStatus]);
 
             useEffect(() => {
-                if (appStatus === 'online') {
+                if (appStatus === 'online' && !isInitialLoading) { // Avoid saving initial empty state
                     const handler = setTimeout(() => {
                         saveDataToFirestore();
                     }, 1000);
                     return () => clearTimeout(handler);
                 }
-            }, [timetable, eventConfig, saveDataToFirestore, appStatus]);
+            }, [timetable, eventConfig, saveDataToFirestore, appStatus, isInitialLoading]);
 
             const handleSetMode = (newMode) => {
                 if (newMode === 'live' && !imagesLoaded) {
-                    // Optionally, show a loading indicator until images are ready
-                    console.log("Waiting for images to preload...");
                     return;
                 }
                 setMode(newMode);
             };
 
-            if (isInitialLoading || (mode === 'live' && !imagesLoaded)) {
+            const isLoading = isInitialLoading || (mode === 'live' && !imagesLoaded);
+
+            if (isLoading) {
                  return (
                     <div className="flex flex-col items-center justify-center h-screen bg-surface-background">
                         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spinner mb-4"></div>
