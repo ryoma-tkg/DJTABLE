@@ -661,14 +661,6 @@
                 updateWidth();
                 window.addEventListener('resize', updateWidth);
                 
-                const initialOnAirDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime);
-                if (initialOnAirDj) {
-                    setCurrentDj(initialOnAirDj);
-                    if (initialOnAirDj.imageUrl && !initialOnAirDj.isBuffer) {
-                        setBackgroundDj(initialOnAirDj);
-                    }
-                }
-
                 return () => {
                     clearInterval(timer);
                     window.removeEventListener('resize', updateWidth);
@@ -695,7 +687,7 @@
                     }
                 }
                 
-                if ((newCurrentDj?.id !== currentDj?.id) || (newStatus !== status && status === 'LOADING')) {
+                if (newCurrentDj?.id !== currentDj?.id || newStatus !== status) {
                      setCurrentDj(newCurrentDj);
                      
                      if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
@@ -705,10 +697,14 @@
                      
                      const hasNewImage = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
                      
-                     backgroundTimeoutRef.current = setTimeout(() => {
-                        if(hasNewImage) setBackgroundDj(newCurrentDj);
+                     if (newStatus === 'ON AIR') {
+                         backgroundTimeoutRef.current = setTimeout(() => {
+                            if(hasNewImage) setBackgroundDj(newCurrentDj);
+                            setFadingOutDj(null);
+                         }, 1500);
+                     } else {
                         setFadingOutDj(null);
-                     }, 1500);
+                     }
                 }
                 
                 setNextDj(newNextDj);
@@ -731,13 +727,13 @@
                 const itemWidth = 256, gap = 24, step = itemWidth + gap;
                 const centerScreenOffset = containerWidth / 2, centerItemOffset = itemWidth / 2;
                 let targetIndex = schedule.findIndex(dj => dj.id === currentDj?.id);
-                if (targetIndex === -1) {
+                if (status === 'UPCOMING' || targetIndex === -1) {
                     targetIndex = schedule.findIndex(dj => now < dj.startTime) ?? schedule.length - 1;
                 }
 
                 const finalX = centerScreenOffset - centerItemOffset - (targetIndex * step);
                 return `translateX(${finalX}px)`;
-            }, [currentDj, containerWidth, schedule, now]);
+            }, [currentDj, containerWidth, schedule, now, status]);
             
             const formatTime = (seconds) => {
                 if (seconds < 0) seconds = 0;
@@ -797,19 +793,12 @@
                                     </div>
                                 </main>
                             )}
-                            {isFirstDjUpcoming && djToDisplay && (
+                            {status === 'UPCOMING' && djToDisplay && (
                                  <div className="text-center">
                                      <p className="text-sm text-on-surface-variant font-bold tracking-widest mb-1">FIRST DJ</p>
                                      <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
                                      <p className="text-4xl md:text-5xl font-mono" style={{color: djToDisplay.color}}>開始まで {formatTime(timeLeft)}</p>
                                  </div>
-                            )}
-                            {status === 'UPCOMING' && !isFirstDjUpcoming && djToDisplay && (
-                                <div className="text-center">
-                                    <p className="text-2xl text-on-surface-variant font-medium">UPCOMING</p>
-                                    <h1 className="text-5xl md:text-7xl font-bold my-2">{djToDisplay.name}</h1>
-                                    <p className="text-4xl md:text-5xl font-mono" style={{color: djToDisplay.color}}>開始まで {formatTime(timeLeft)}</p>
-                                </div>
                             )}
                             {status === 'FINISHED' && ( <div className="text-center"><h1 className="text-5xl md:text-7xl font-bold">EVENT FINISHED</h1></div> )}
                         </div>
@@ -819,7 +808,7 @@
                         <div ref={timelineContainerRef} className="w-full shrink-0 overflow-hidden mask-gradient z-10 pb-4">
                             <div className="flex h-full items-center gap-6 px-4 py-2" style={{ transform: timelineTransform, transition: 'transform 0.5s ease-in-out' }}>
                                 {schedule.map((dj, index) => (
-                                    <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 border border-white/30 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${dj.id === currentDj?.id ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
+                                    <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 border border-white/30 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${(status === 'ON AIR' && dj.id === currentDj?.id) ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
                                         {!dj.isBuffer && (
                                             <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
                                                 {dj.imageUrl ? <SimpleImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
