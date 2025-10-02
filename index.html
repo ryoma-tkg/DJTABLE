@@ -83,10 +83,6 @@
             -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
             mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
         }
-        .dragging-item {
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            transform: scale(1.05);
-        }
     </style>
 </head>
 <body class="bg-surface-background text-on-surface">
@@ -360,11 +356,10 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
-
-            const dragState = useRef({ draggedIndex: -1, pointerStart: 0, currentPos: 0, newIndex: -1 }).current;
-            const itemRefs = useRef(new Map());
-            const [isDragging, setIsDragging] = useState(false);
-            const animationFrameRef = useRef();
+            const [draggedIndex, setDraggedIndex] = useState(null);
+            const draggedItem = useRef(null);
+            const placeholderRef = useRef(null);
+            const listRef = useRef(null);
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -452,94 +447,56 @@
                 });
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
 
-            const handlePointerDown = (e, index) => {
-                if (e.button !== 0) return;
-                dragState.draggedIndex = index;
-                dragState.newIndex = index;
-                dragState.pointerStart = e.clientY;
-                setIsDragging(true);
-                e.target.setPointerCapture(e.pointerId);
+            const onDragStart = (e, index) => {
+                setDraggedIndex(index);
+                draggedItem.current = e.currentTarget;
+                
+                const placeholder = placeholderRef.current;
+                placeholder.style.height = `${e.currentTarget.offsetHeight}px`;
+                placeholder.style.width = `${e.currentTarget.offsetWidth}px`;
+                
+                e.currentTarget.style.opacity = '0.5';
+            };
+
+            const onDragOver = (e, index) => {
+                e.preventDefault();
+                const draggedOverItem = e.currentTarget;
+
+                if (draggedIndex === null || draggedIndex === index || !draggedItem.current) return;
+                
+                const list = listRef.current;
+                const items = Array.from(list.children).filter(child => child !== placeholderRef.current && child !== draggedItem.current);
+                
+                const bounding = draggedOverItem.getBoundingClientRect();
+                const offset = bounding.y + (bounding.height / 2);
+
+                if (e.clientY > offset) {
+                    list.insertBefore(placeholderRef.current, draggedOverItem.nextSibling);
+                } else {
+                    list.insertBefore(placeholderRef.current, draggedOverItem);
+                }
+
+                const newTimetable = [...timetable];
+                const [dragged] = newTimetable.splice(draggedIndex, 1);
+                newTimetable.splice(index, 0, dragged);
+                setTimetable(newTimetable);
+                setDraggedIndex(index);
             };
             
-            const handlePointerMove = (e) => {
-                if (!isDragging || dragState.draggedIndex === -1) return;
-                
-                const pointerDelta = e.clientY - dragState.pointerStart;
-                dragState.currentPos = pointerDelta;
-
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = requestAnimationFrame(() => {
-                    const draggedItem = itemRefs.current.get(dragState.draggedIndex);
-                    if (draggedItem) {
-                        draggedItem.style.transform = `translateY(${pointerDelta}px)`;
-                    }
-
-                    let newIndex = dragState.draggedIndex;
-                    itemRefs.current.forEach((ref, i) => {
-                        if (i === dragState.draggedIndex || !ref) return;
-                        
-                        const itemMidY = ref.offsetTop + ref.offsetHeight / 2;
-                        const draggedItemTop = ref.offsetTop + pointerDelta;
-
-                        if (pointerDelta > 0 && draggedItemTop > itemMidY && i > dragState.draggedIndex) {
-                            newIndex = Math.max(newIndex, i);
-                        } else if (pointerDelta < 0 && draggedItemTop < itemMidY && i < dragState.draggedIndex) {
-                            newIndex = Math.min(newIndex, i);
-                        }
-                    });
-
-                    if (newIndex !== dragState.newIndex) {
-                        dragState.newIndex = newIndex;
-                        // Re-render to update translations of other items
-                        setTimetable(current => [...current]);
-                    }
-                });
-            };
-
-            const handlePointerUp = (e) => {
-                if (!isDragging) return;
-                
-                setIsDragging(false);
-                
-                const draggedItem = itemRefs.current.get(dragState.draggedIndex);
-                if (draggedItem) {
-                    draggedItem.style.transform = '';
+            const onDragEnd = () => {
+                if(draggedItem.current) {
+                    draggedItem.current.style.opacity = '1';
                 }
+                setDraggedIndex(null);
+                placeholderRef.current.style.height = '0px';
 
-                if (dragState.draggedIndex !== dragState.newIndex) {
-                    const list = [...timetable];
-                    const [item] = list.splice(dragState.draggedIndex, 1);
-                    list.splice(dragState.newIndex, 0, item);
-                    setTimetable(recalculateTimes(list, eventConfig.startTime));
-                }
-
-                dragState.draggedIndex = -1;
-                dragState.newIndex = -1;
-            };
-
-            const getTransform = (index) => {
-                if (!isDragging || index === dragState.draggedIndex) return 'translateY(0px)';
-                
-                const draggedItem = itemRefs.current.get(dragState.draggedIndex);
-                if(!draggedItem) return 'translateY(0px)';
-
-                const draggedItemHeight = draggedItem.offsetHeight + 16;
-                
-                if (index > dragState.draggedIndex && index <= dragState.newIndex) {
-                    return `translateY(-${draggedItemHeight}px)`;
-                }
-                if (index < dragState.draggedIndex && index >= dragState.newIndex) {
-                    return `translateY(${draggedItemHeight}px)`;
-                }
-                return 'translateY(0px)';
+                // Recalculate times after dropping
+                setTimetable(current => recalculateTimes(current, eventConfig.startTime));
             };
 
             return (
                 <div 
                     className="p-4 md:p-8 max-w-4xl mx-auto"
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
                 >
                     <ConfirmModal
                         isOpen={isResetConfirmOpen}
@@ -580,22 +537,19 @@
                         </div>
                     </div>
 
-                    <div className="relative space-y-4">
+                    <div ref={listRef} className="space-y-4">
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
-                                ref={el => itemRefs.current.set(index, el)}
-                                className={`transition-transform duration-300 ease-in-out ${isDragging && dragState.draggedIndex === index ? 'dragging-item' : ''}`}
-                                style={{
-                                    transform: isDragging ? getTransform(index) : 'translateY(0px)',
-                                    zIndex: isDragging && dragState.draggedIndex === index ? 10 : 1,
-                                    position: 'relative'
-                                }}
+                                draggable
+                                onDragStart={(e) => onDragStart(e, index)}
+                                onDragOver={(e) => onDragOver(e, index)}
+                                onDragEnd={onDragEnd}
+                                className={draggedIndex === index ? 'opacity-50' : ''}
                            >
                                 <DjItem
                                     dj={dj}
                                     isPlaying={currentlyPlayingIndex === index}
-                                    onPointerDown={(e) => handlePointerDown(e, index)}
                                     onEditClick={() => setEditingDjIndex(index)}
                                     onUpdate={(field, value) => handleUpdate(index, field, value)}
                                     onColorPickerToggle={setOpenColorPickerId}
@@ -606,6 +560,7 @@
                                 />
                            </div>
                         ))}
+                        <div ref={placeholderRef} className="bg-brand-primary/20 rounded-2xl transition-all" style={{height: '0px'}}></div>
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row gap-4">
                         <button onClick={() => addNewDj(false)} className="w-full flex items-center justify-center bg-brand-primary hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-opacity duration-200"><PlusIcon className="w-5 h-5 mr-2"/><span>DJを追加</span></button>
