@@ -325,13 +325,11 @@
             };
 
             const handlePointerDown = (e, index) => {
-                // Only allow left mouse button or touch to start a drag
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
 
                 const draggableItem = itemRefs.current[index];
                 if (!draggableItem) return;
-                
-                // Set draggable true on the element to enable HTML5 drag-and-drop
+
                 draggableItem.setAttribute('draggable', 'true');
                 setDraggedItemIndex(index);
                 
@@ -363,18 +361,21 @@
                 let targetPosition = null;
 
                 itemRefs.current.forEach((ref, index) => {
-                    if (ref && index !== draggedItemIndex) { // Don't check against the item being dragged
+                    if (ref) {
                         const rect = ref.getBoundingClientRect();
-                        const midY = rect.top + rect.height / 2;
-                        // Check if pointer is within the vertical bounds of the item
                         if (clientY >= rect.top && clientY <= rect.bottom) {
-                           targetIndex = index;
-                           targetPosition = clientY < midY ? 'top' : 'bottom';
+                            targetIndex = index;
+                            const midY = rect.top + rect.height / 2;
+                            targetPosition = clientY < midY ? 'top' : 'bottom';
                         }
                     }
                 });
                 
-                setDropIndicator({ index: targetIndex, position: targetPosition });
+                if (targetIndex !== -1 && targetIndex !== draggedItemIndex) {
+                    setDropIndicator({ index: targetIndex, position: targetPosition });
+                } else {
+                    setDropIndicator({ index: null, position: null });
+                }
             };
             
             const handlePointerUp = (e) => {
@@ -383,35 +384,17 @@
                     if(draggableElement) draggableElement.setAttribute('draggable', 'false');
 
                     if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                        let list = [...timetable];
+                        const list = [...timetable];
                         const [itemToMove] = list.splice(draggedItemIndex, 1);
-                        
+
                         let insertAtIndex = dropIndicator.index;
-
-                        // Adjust index if moving an item downwards
                         if (draggedItemIndex < dropIndicator.index) {
-                            if (dropIndicator.position === 'top') {
-                                // standard behavior is fine
-                            } else { // position is bottom
-                                insertAtIndex++;
-                            }
-                        } 
-                        // Adjust index if moving an item upwards
-                        else {
-                             if (dropIndicator.position === 'bottom') {
-                                 insertAtIndex++;
-                             }
+                            insertAtIndex--;
                         }
-                         // The splice adjustment logic can be complex. Simpler is often better.
-                         list = [...timetable];
-                         const [movedItem] = list.splice(draggedItemIndex, 1);
-                         
-                         let newIndex = dropIndicator.index;
-                         if (draggedItemIndex < newIndex && dropIndicator.position === 'top') newIndex--;
-                         if (draggedItemIndex > newIndex && dropIndicator.position === 'bottom') newIndex++;
-
-                         list.splice(newIndex, 0, movedItem);
-
+                        if (dropIndicator.position === 'bottom') {
+                            insertAtIndex++;
+                        }
+                        list.splice(insertAtIndex, 0, itemToMove);
                         setTimetable(recalculateTimes(list, eventConfig.startTime));
                     }
                 }
@@ -422,7 +405,6 @@
             };
             
             const handleDragStart = (e) => {
-                // Use a transparent image as the drag ghost, since we render our own.
                 const img = new Image();
                 img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
                 e.dataTransfer.setDragImage(img, 0, 0);
@@ -450,26 +432,25 @@
                     <div 
                         ref={el => itemRefs.current[index] = el}
                         className="relative"
-                        onDragStart={handleDragStart}
                     >
                         {dropIndicator.index === index && dropIndicator.position === 'top' && (
                             <div className="absolute -top-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
                         )}
                         
                         <div
+                            onDragStart={handleDragStart}
                             className={`
-                                bg-surface-container rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-lg p-4
+                                bg-surface-container rounded-2xl flex items-center gap-4 transition-shadow duration-300 shadow-lg p-4
                                 ${isBeingDragged ? 'opacity-0' : 'opacity-100'}
                                 ${isPlaying ? 'ring-2 shadow-[0_0_12px_var(--tw-ring-color)]' : 'ring-1'}
                             `}
                             style={{ '--tw-ring-color': isPlaying ? dj.color : (dj.color + '99') }}
                         >
-                             <div className="cursor-grab touch-none p-2 -ml-2" onPointerDown={(e) => handlePointerDown(e, index)}>
+                             <div className="cursor-grab touch-none" data-drag-handle onPointerDown={(e) => handlePointerDown(e, index)}>
                                 <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
                              </div>
                             <button 
-                                draggable="false"
-                                onPointerUp={() => setEditingDjIndex(index)}
+                                onClick={() => setEditingDjIndex(index)} 
                                 onPointerDown={(e) => e.stopPropagation()}
                                 className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
                             >
