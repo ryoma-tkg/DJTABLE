@@ -661,11 +661,16 @@
                 updateWidth();
                 window.addEventListener('resize', updateWidth);
                 
-                const initialDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime) || schedule[0];
-                if (initialDj) {
-                    setCurrentDj(initialDj);
-                    setBackgroundDj(initialDj);
+                const initialOnAirDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime);
+                if (initialOnAirDj) {
+                    setCurrentDj(initialOnAirDj);
+                    setBackgroundDj(initialOnAirDj);
+                } else {
+                    const initialUpcomingDj = schedule.find(dj => new Date() < dj.startTime);
+                    setCurrentDj(initialUpcomingDj || schedule[0] || null);
+                    setBackgroundDj(null);
                 }
+
 
                 return () => {
                     clearInterval(timer);
@@ -693,7 +698,7 @@
                     }
                 }
                 
-                if (newCurrentDj?.id !== currentDj?.id) {
+                if (newCurrentDj?.id !== currentDj?.id || newStatus !== status) {
                      setCurrentDj(newCurrentDj);
                      
                      if (backgroundTimeoutRef.current) clearTimeout(backgroundTimeoutRef.current);
@@ -706,7 +711,7 @@
                      backgroundTimeoutRef.current = setTimeout(() => {
                         setBackgroundDj(hasNewImage ? newCurrentDj : null);
                         setFadingOutDj(null);
-                     }, 1500);
+                     }, 1500); // Wait for fade-out to complete
                 }
                 
                 setNextDj(newNextDj);
@@ -722,7 +727,7 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, currentDj?.id]);
+            }, [now, schedule, currentDj?.id, status]);
 
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
