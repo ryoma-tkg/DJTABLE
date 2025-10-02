@@ -490,20 +490,13 @@
                         />
                     )}
                     <header className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
-                        <div className="flex flex-col gap-2">
-                             <input 
-                                type="text" 
-                                value={eventConfig.title || 'DJ Timekeeper Pro'}
-                                onChange={(e) => handleEventConfigChange('title', e.target.value)}
-                                className="text-3xl font-bold text-brand-secondary tracking-wide bg-transparent focus:outline-none focus:bg-surface-container/50 rounded-lg p-2 w-full sm:w-auto"
-                                placeholder="イベントタイトル"
-                            />
-                            {eventEndTime && (
-                                 <div className="bg-surface-container/50 text-on-surface-variant font-semibold py-2 px-4 rounded-full text-lg tracking-wider font-mono text-center">
-                                    {eventConfig.startTime} - {eventEndTime}
-                                </div>
-                            )}
-                        </div>
+                        <input 
+                            type="text" 
+                            value={eventConfig.title || 'DJ Timekeeper Pro'}
+                            onChange={(e) => handleEventConfigChange('title', e.target.value)}
+                            className="text-3xl font-bold text-brand-secondary tracking-wide bg-transparent focus:outline-none focus:bg-surface-container/50 rounded-lg p-2 w-full sm:w-auto"
+                            placeholder="イベントタイトル"
+                        />
                         <div className="flex gap-2 w-full sm:w-auto self-center">
                             <button onClick={() => setIsResetConfirmOpen(true)} title="すべてリセット" className="flex items-center justify-center p-3.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-full transition-colors">
                                 <ResetIcon className="w-5 h-5"/>
@@ -514,6 +507,11 @@
                         </div>
                     </header>
                     <div className="bg-surface-container/50 rounded-xl p-4 mb-8">
+                         {eventEndTime && (
+                            <div className="bg-surface-container/50 text-on-surface-variant font-semibold py-2 px-4 rounded-full text-lg tracking-wider font-mono text-center mb-4 max-w-xs mx-auto">
+                                {eventConfig.startTime} - {eventEndTime}
+                            </div>
+                        )}
                         <label className="text-xs text-on-surface-variant tracking-wider mb-2 text-center block">イベント開始時間を設定</label>
                         <div className="w-full max-w-xs mx-auto">
                            <CustomTimeInput value={eventConfig.startTime} onChange={(v) => handleEventConfigChange('startTime', v)} />
@@ -597,7 +595,7 @@
                 };
                 loadImages();
                 return () => { isCancelled = true; };
-            }, [urls]);
+            }, [JSON.stringify(urls)]); // Use JSON.stringify for deep comparison
             return loaded;
         };
 
@@ -678,10 +676,15 @@
 
                      if(backgroundDj) setFadingOutDj(backgroundDj);
                      
-                     backgroundTimeoutRef.current = setTimeout(() => {
-                        setBackgroundDj(newCurrentDj);
-                        setFadingOutDj(null); 
-                     }, 1000);
+                     if (newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer) {
+                         backgroundTimeoutRef.current = setTimeout(() => {
+                            setBackgroundDj(newCurrentDj);
+                            setFadingOutDj(null); 
+                         }, 1000);
+                     } else {
+                        setBackgroundDj(null);
+                        setTimeout(() => setFadingOutDj(null), 1500); // Wait for fade out to complete
+                     }
                 }
                 
                 setNextDj(newNextDj);
@@ -776,23 +779,25 @@
                         </div>
                     </div>
                     
-                    <div ref={timelineContainerRef} className="w-full shrink-0 overflow-hidden mask-gradient z-10 pb-4">
-                        <div className="flex h-full items-center gap-6 px-4 py-2" style={{ transform: timelineTransform, transition: 'transform 0.5s ease-in-out' }}>
-                            {schedule.map((dj, index) => (
-                                <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${dj.id === currentDj?.id ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
-                                    {!dj.isBuffer && (
-                                        <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
-                                            {dj.imageUrl ? <SimpleImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                    {status !== 'FINISHED' && (
+                        <div ref={timelineContainerRef} className="w-full shrink-0 overflow-hidden mask-gradient z-10 pb-4">
+                            <div className="flex h-full items-center gap-6 px-4 py-2" style={{ transform: timelineTransform, transition: 'transform 0.5s ease-in-out' }}>
+                                {schedule.map((dj, index) => (
+                                    <div key={dj.id} className={`shrink-0 w-64 h-24 bg-surface-container/40 backdrop-blur-sm rounded-2xl p-4 flex items-center transition-all duration-500 border border-white/10 ${dj.isBuffer ? 'justify-center' : 'gap-6'} ${dj.id === currentDj?.id ? 'opacity-100 scale-100' : 'opacity-60 scale-90'}`}>
+                                        {!dj.isBuffer && (
+                                            <div className="w-14 h-14 rounded-full bg-surface-container flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                                {dj.imageUrl ? <SimpleImage src={dj.imageUrl} className="w-full h-full object-cover"/> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                                            </div>
+                                        )}
+                                        <div className="overflow-hidden flex flex-col justify-center">
+                                            <p className={`text-lg font-bold truncate w-full ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.name}</p>
+                                            <p className={`text-sm font-mono text-on-surface-variant ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                         </div>
-                                    )}
-                                    <div className="overflow-hidden flex flex-col justify-center">
-                                        <p className={`text-lg font-bold truncate w-full ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.name}</p>
-                                        <p className={`text-sm font-mono text-on-surface-variant ${dj.isBuffer ? 'text-center' : 'text-left'}`}>{dj.startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             );
         };
