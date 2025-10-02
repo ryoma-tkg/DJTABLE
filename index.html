@@ -379,24 +379,26 @@
             };
             
             const handlePointerUp = (e) => {
-                if(draggedItemIndex !== null) {
-                    const draggableElement = itemRefs.current[draggedItemIndex];
-                    if(draggableElement) draggableElement.setAttribute('draggable', 'false');
+                if (draggedItemIndex === null) {
+                    return; // If a drag was not active, do nothing.
+                }
 
-                    if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                        const list = [...timetable];
-                        const [itemToMove] = list.splice(draggedItemIndex, 1);
+                const draggableElement = itemRefs.current[draggedItemIndex];
+                if(draggableElement) draggableElement.setAttribute('draggable', 'false');
 
-                        let insertAtIndex = dropIndicator.index;
-                        if (draggedItemIndex < dropIndicator.index) {
-                            insertAtIndex--;
-                        }
-                        if (dropIndicator.position === 'bottom') {
-                            insertAtIndex++;
-                        }
-                        list.splice(insertAtIndex, 0, itemToMove);
-                        setTimetable(recalculateTimes(list, eventConfig.startTime));
+                if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
+                    const list = [...timetable];
+                    const [itemToMove] = list.splice(draggedItemIndex, 1);
+
+                    let insertAtIndex = dropIndicator.index;
+                    if (draggedItemIndex < dropIndicator.index) {
+                        insertAtIndex--;
                     }
+                    if (dropIndicator.position === 'bottom') {
+                        insertAtIndex++;
+                    }
+                    list.splice(insertAtIndex, 0, itemToMove);
+                    setTimetable(recalculateTimes(list, eventConfig.startTime));
                 }
                 
                 setDraggedItemIndex(null);
@@ -450,7 +452,7 @@
                                 <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
                              </div>
                             <button 
-                                onClick={() => setEditingDjIndex(index)} 
+                                onClick={() => setEditingDjIndex(index)}
                                 onPointerDown={(e) => e.stopPropagation()}
                                 className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
                             >
