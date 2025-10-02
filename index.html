@@ -123,7 +123,7 @@
 
         // --- Icon Components ---
         const PlayIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>);
-        const PlusIcon = ({className}) => (<svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
+        const PlusIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
         const TrashIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>);
         const GripIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>);
         const UserIcon = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>);
@@ -664,15 +664,16 @@
             );
         };
         
-        const BackgroundImage = memo(({ dj, status }) => {
-            if (!dj || !dj.imageUrl || dj.isBuffer) return null;
+        const BackgroundImage = memo(({ dj, isFadingOut }) => {
+            const shouldShow = dj && dj.imageUrl && !dj.isBuffer;
+            if (!shouldShow) return null;
 
             return (
-                <div className={`absolute inset-0 -z-20 transition-opacity duration-[1500ms] ${status === 'visible' ? 'opacity-100' : 'opacity-0'}`}>
-                    <div className="absolute inset-0 overflow-hidden backdrop-blur-2xl">
-                        <img 
+                <div className={`absolute inset-0 -z-20 ${isFadingOut ? 'animate-fade-out' : 'animate-fade-in'}`}>
+                    <div className="absolute inset-0 overflow-hidden">
+                        <FadeInImage 
                           src={dj.imageUrl} 
-                          className="w-full h-full object-cover scale-110 opacity-20" 
+                          className="w-full h-full object-cover scale-110 opacity-20 blur-2xl"
                         />
                     </div>
                 </div>
@@ -689,8 +690,9 @@
             const [status, setStatus] = useState('LOADING');
             const [timeLeft, setTimeLeft] = useState(0);
             const [progress, setProgress] = useState(0);
-            
-            const [backgrounds, setBackgrounds] = useState([]);
+
+            const [bgDj, setBgDj] = useState(null);
+            const [prevBgDj, setPrevBgDj] = useState(null);
             
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
@@ -749,14 +751,13 @@
                 
                 if (newCurrentDj?.id !== currentDj?.id) {
                      setCurrentDj(newCurrentDj);
-
-                     setBackgrounds(prevBgs => {
-                        const newBgs = prevBgs.map(bg => ({ ...bg, status: 'hidden' }));
-                        if (newCurrentDj) {
-                           return [...newBgs, { dj: newCurrentDj, status: 'visible' }];
-                        }
-                        return newBgs;
-                     });
+                     if (bgDj) { // Only set prevBgDj if there was a bgDj before
+                         setPrevBgDj(bgDj);
+                         setTimeout(() => {
+                             setPrevBgDj(null); // Clean up after animation
+                         }, 1500); // Must match fade-out animation duration
+                     }
+                     setBgDj(newCurrentDj);
                 }
                 
                 setNextDj(newNextDj);
@@ -772,7 +773,7 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, currentDj]);
+            }, [now, schedule, currentDj, bgDj]);
             
             // Preload next DJ's images
             useEffect(() => {
@@ -813,10 +814,9 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    {backgrounds.map(({ dj, status }) => (
-                       <BackgroundImage key={dj.id} dj={dj} status={status} />
-                    ))}
-                    
+                    {prevBgDj && <BackgroundImage dj={prevBgDj} isFadingOut={true} />}
+                    {bgDj && <BackgroundImage dj={bgDj} isFadingOut={false} />}
+
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
                            <div className="bg-black/30 backdrop-blur-sm text-on-surface font-bold py-2 px-4 rounded-full text-2xl tracking-wider font-mono text-center w-[10ch]">
