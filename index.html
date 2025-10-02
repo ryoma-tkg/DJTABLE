@@ -650,13 +650,17 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    <div key={`bg-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in -z-10">
+                    {/* Background Image Container (un-blurred) */}
+                    <div key={`bg-img-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in -z-20 opacity-30">
                         {djToDisplay && djToDisplay.imageUrl && !djToDisplay.isBuffer && (
                             <div className="absolute inset-0 overflow-hidden">
-                                <img src={djToDisplay.imageUrl} className="w-full h-full object-cover blur-2xl scale-110 opacity-20" />
+                                <img src={djToDisplay.imageUrl} className="w-full h-full object-cover scale-110" />
                             </div>
                         )}
                     </div>
+
+                    {/* Blurring Overlay using backdrop-filter */}
+                    <div className="absolute inset-0 -z-10 backdrop-blur-2xl"></div>
 
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
@@ -841,15 +845,15 @@
                             </p>
                             <code className="bg-surface-background text-left p-4 rounded-lg block overflow-x-auto text-sm">
                                 <pre className="whitespace-pre-wrap">
-                                {`// index.html内のこの部分を書き換えてください
-                                const firebaseConfig = {
-        apiKey: "AIzaSyCDe_GANzGxXP0IRk90is37L1ZGobw1sQ8",
-        authDomain: "djtable-2408d.firebaseapp.com",
-        projectId: "djtable-2408d",
-        storageBucket: "djtable-2408d.appspot.com",
-        messagingSenderId: "780384107579",
-        appId: "1:780384107579:web:97fddd203fedff885af01e"
-                                };`}
+{`// index.html内のこの部分を書き換えてください
+const firebaseConfig = {
+  apiKey: "ご自身のAPIキー",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "...",
+  appId: "..."
+};`}
                                 </pre>
                             </code>
                             <p className="text-on-surface-variant mt-6 text-sm">
