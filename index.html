@@ -664,15 +664,22 @@
             );
         };
         
-        const BackgroundImage = memo(({ dj, isVisible }) => {
-            if (!dj || !dj.imageUrl || dj.isBuffer) {
+        const BackgroundImage = memo(({ dj, animationState }) => {
+            const shouldRender = dj && dj.imageUrl && !dj.isBuffer;
+            if (!shouldRender) {
                 return null;
             }
+            
+            const animationClass = {
+                'FADING_IN': 'animate-fade-in',
+                'FADING_OUT': 'animate-fade-out',
+                'VISIBLE': 'opacity-100',
+            }[animationState];
 
             return (
-                <div className={`absolute inset-0 -z-20 ${isVisible ? 'animate-fade-in' : 'animate-fade-out'}`}>
+                <div className={`absolute inset-0 -z-20 ${animationClass}`}>
                     <div className="absolute inset-0 overflow-hidden">
-                        <FadeInImage 
+                        <img 
                           src={dj.imageUrl} 
                           className="w-full h-full object-cover scale-110 opacity-20 blur-2xl"
                         />
@@ -693,7 +700,7 @@
             const [progress, setProgress] = useState(0);
 
             const [backgroundDj, setBackgroundDj] = useState(null);
-            const [isBackgroundVisible, setIsBackgroundVisible] = useState(false);
+            const [animationState, setAnimationState] = useState('HIDDEN'); // HIDDEN, FADING_IN, VISIBLE, FADING_OUT
             const transitionTimeoutRef = useRef(null);
             
             const schedule = useMemo(() => {
@@ -723,6 +730,13 @@
                 };
                 updateWidth();
                 window.addEventListener('resize', updateWidth);
+                
+                // --- Initial background setup on component mount ---
+                const initialDj = schedule.find(dj => new Date() >= dj.startTime && new Date() < dj.endTime);
+                if (initialDj && initialDj.imageUrl && !initialDj.isBuffer) {
+                    setBackgroundDj(initialDj);
+                    setAnimationState('VISIBLE');
+                }
 
                 return () => {
                     clearInterval(timer);
@@ -731,7 +745,7 @@
                         clearTimeout(transitionTimeoutRef.current);
                     }
                 };
-            }, []);
+            }, []); // Empty dependency array to run only once on mount
             
             useEffect(() => {
                 const currentIndex = schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime);
@@ -756,23 +770,33 @@
                 
                 if (newCurrentDj?.id !== currentDj?.id) {
                      setCurrentDj(newCurrentDj);
+                     
+                     if (transitionTimeoutRef.current) {
+                        clearTimeout(transitionTimeoutRef.current);
+                     }
 
-                    const newBgShouldBeVisible = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
+                     const newBgShouldBeVisible = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
 
-                    if (isBackgroundVisible) {
-                        setIsBackgroundVisible(false);
-                        transitionTimeoutRef.current = setTimeout(() => {
-                            setBackgroundDj(newCurrentDj);
-                            if (newBgShouldBeVisible) {
-                                setIsBackgroundVisible(true);
-                            }
-                        }, 1500);
-                    } else {
-                        setBackgroundDj(newCurrentDj);
-                        if (newBgShouldBeVisible) {
-                            setIsBackgroundVisible(true);
-                        }
-                    }
+                     const startFadeOut = () => {
+                         setAnimationState('FADING_OUT');
+                         transitionTimeoutRef.current = setTimeout(startFadeIn, 1500); // Wait for fade-out
+                     };
+
+                     const startFadeIn = () => {
+                         setBackgroundDj(newCurrentDj);
+                         if (newBgShouldBeVisible) {
+                             setAnimationState('FADING_IN');
+                             transitionTimeoutRef.current = setTimeout(() => setAnimationState('VISIBLE'), 1500); // Transition to visible
+                         } else {
+                             setAnimationState('HIDDEN');
+                         }
+                     };
+                     
+                     if (animationState === 'VISIBLE' || animationState === 'FADING_IN') {
+                         startFadeOut();
+                     } else {
+                         startFadeIn();
+                     }
                 }
                 
                 setNextDj(newNextDj);
@@ -788,7 +812,7 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, currentDj]); // Removed isBackgroundVisible from dependency array to prevent loops
+            }, [now, schedule]);
             
             // Preload next DJ's images for smoother transitions
             useEffect(() => {
@@ -829,7 +853,7 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    <BackgroundImage dj={backgroundDj} isVisible={isBackgroundVisible} />
+                    <BackgroundImage dj={backgroundDj} animationState={animationState} />
 
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
@@ -837,7 +861,7 @@
                             {now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </div>
                     </header>
-                    <button onClick={() => setMode('edit')} className="absolute top-4 right-4 flex items-center bg-surface-container hover:opacity-90 text-white font-bold py-2 px-4 rounded-full transition-opacity duration-200 text-sm z-20">編集</button>
+                    <button onClick={() => setMode('edit')} className="absolute top-4 right-4 flex items-center bg-surface-container hover:opacity-90 text-white font-bold py-3 px-4 rounded-full transition-opacity duration-200 text-sm z-20">編集</button>
 
                     <div className="flex-grow flex items-center justify-center w-full relative px-4">
                         <div key={`content-${djToDisplay?.id || 'finished'}`} className="w-full animate-fade-in-up">
