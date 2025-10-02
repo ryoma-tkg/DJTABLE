@@ -88,6 +88,10 @@
             -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
             mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
         }
+        .dragging-item {
+            opacity: 0.5;
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="bg-surface-background text-on-surface">
@@ -361,10 +365,10 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
-
-            const draggedItem = useRef(null);
-            const dragOverItem = useRef(null);
             
+            const [draggedIndex, setDraggedIndex] = useState(null);
+            const dragItemNode = useRef(null);
+
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
                 return () => clearInterval(timer);
@@ -450,33 +454,35 @@
                     return recalculateTimes(newTimetable, eventConfig.startTime);
                 });
             }, [eventConfig.startTime, recalculateTimes, setTimetable]);
-            
-            const handleDragStart = (e, position) => {
-                draggedItem.current = position;
+
+            const handleDragStart = (e, index) => {
+                setDraggedIndex(index);
+                dragItemNode.current = e.target;
+                dragItemNode.current.addEventListener('dragend', handleDragEnd);
             };
 
-            const handleDragEnter = (e, position) => {
-                dragOverItem.current = position;
+            const handleDragEnter = (e, targetIndex) => {
+                if (draggedIndex === null || dragItemNode.current === e.target) return;
+                
+                setTimetable(prevTimetable => {
+                    let newTimetable = [...prevTimetable];
+                    const [draggedItem] = newTimetable.splice(draggedIndex, 1);
+                    newTimetable.splice(targetIndex, 0, draggedItem);
+                    setDraggedIndex(targetIndex);
+                    return newTimetable; 
+                });
             };
 
-            const handleDrop = (e) => {
-                if (draggedItem.current === null || dragOverItem.current === null) return;
-                
-                const newTimetable = [...timetable];
-                const draggedItemContent = newTimetable[draggedItem.current];
-                newTimetable.splice(draggedItem.current, 1);
-                newTimetable.splice(dragOverItem.current, 0, draggedItemContent);
-                
-                draggedItem.current = null;
-                dragOverItem.current = null;
-                
-                setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
+            const handleDragEnd = () => {
+                setDraggedIndex(null);
+                dragItemNode.current.removeEventListener('dragend', handleDragEnd);
+                dragItemNode.current = null;
+
+                setTimetable(prev => recalculateTimes(prev, eventConfig.startTime));
             };
 
             return (
-                <div 
-                    className="p-4 md:p-8 max-w-4xl mx-auto"
-                >
+                <div className="p-4 md:p-8 max-w-4xl mx-auto">
                     <ConfirmModal
                         isOpen={isResetConfirmOpen}
                         title="タイムテーブルをリセット"
@@ -516,14 +522,15 @@
                         </div>
                     </div>
 
-                    <div className="space-y-4" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+                    <div className="space-y-4">
                         {timetable.map((dj, index) => (
                            <div
                                 key={dj.id}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, index)}
                                 onDragEnter={(e) => handleDragEnter(e, index)}
-                                className="transition-transform duration-300 ease-in-out"
+                                onDragOver={e => e.preventDefault()}
+                                className={`transition-all duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
                            >
                                 <DjItem
                                     dj={dj}
@@ -562,6 +569,38 @@
                 </div>
             );
         });
+
+        const useImagePreloader = (urls) => {
+            const [loaded, setLoaded] = useState(false);
+            useEffect(() => {
+                let isCancelled = false;
+                const loadImages = async () => {
+                    if (!urls || urls.length === 0) {
+                        setLoaded(true);
+                        return;
+                    }
+                    try {
+                        await Promise.all(
+                            urls.map(url => {
+                                return new Promise((resolve, reject) => {
+                                    const img = new Image();
+                                    img.src = url;
+                                    img.onload = resolve;
+                                    img.onerror = resolve; // Continue even if one image fails
+                                });
+                            })
+                        );
+                        if (!isCancelled) setLoaded(true);
+                    } catch (error) {
+                        console.error("Failed to preload images", error);
+                        if (!isCancelled) setLoaded(true); // Mark as loaded even on error
+                    }
+                };
+                loadImages();
+                return () => { isCancelled = true; };
+            }, [urls]);
+            return loaded;
+        };
 
         const LiveView = ({ timetable, eventConfig, setMode }) => {
             const [now, setNow] = useState(new Date());
@@ -659,15 +698,6 @@
                 }
 
             }, [now, schedule, currentDj?.id]);
-
-            // [MODIFIED] Preload next DJ's image
-            useEffect(() => {
-                if (nextDj && nextDj.imageUrl) {
-                    const img = new Image();
-                    img.src = nextDj.imageUrl;
-                }
-            }, [nextDj]);
-
 
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
@@ -776,6 +806,9 @@
             const dbRef = useRef(null);
             const storageRef = useRef(null);
             
+            const imageUrlsToPreload = useMemo(() => timetable.map(dj => dj.imageUrl).filter(Boolean), [timetable]);
+            const imagesLoaded = useImagePreloader(imageUrlsToPreload);
+
             useEffect(() => {
                 setTimeout(() => setIsInitialLoading(false), 1500);
 
@@ -862,11 +895,22 @@
                 }
             }, [timetable, eventConfig, saveDataToFirestore, appStatus]);
 
-            if (isInitialLoading) {
+            const handleSetMode = (newMode) => {
+                if (newMode === 'live' && !imagesLoaded) {
+                    // Optionally, show a loading indicator until images are ready
+                    console.log("Waiting for images to preload...");
+                    return;
+                }
+                setMode(newMode);
+            };
+
+            if (isInitialLoading || (mode === 'live' && !imagesLoaded)) {
                  return (
                     <div className="flex flex-col items-center justify-center h-screen bg-surface-background">
                         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spinner mb-4"></div>
-                        <p className="text-lg text-on-surface-variant">Loading Timetable...</p>
+                        <p className="text-lg text-on-surface-variant">
+                            {isInitialLoading ? "Loading Timetable..." : "Preparing Live Mode..."}
+                        </p>
                     </div>
                 );
             }
@@ -911,8 +955,8 @@ const firebaseConfig = {
                                 </div>
                             )}
                             {mode === 'edit' ? 
-                                <TimetableEditor {...{eventConfig, setEventConfig, timetable, setTimetable, setMode, storage: storageRef.current}} /> : 
-                                <LiveView {...{timetable, eventConfig, setMode}} />
+                                <TimetableEditor {...{eventConfig, setEventConfig, timetable, setTimetable, setMode: handleSetMode, storage: storageRef.current}} /> : 
+                                <LiveView {...{timetable, eventConfig, setMode: handleSetMode}} />
                             }
                         </>
                     );
