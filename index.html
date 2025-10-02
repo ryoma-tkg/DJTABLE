@@ -112,7 +112,7 @@
 
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+        const { useState, useEffect, useCallback, useMemo, useRef, memo } = React;
 
         const VIVID_COLORS = [
             '#EF4444', '#F97316', '#F59E0B', '#EAB308',
@@ -265,6 +265,90 @@
                 </div>
             );
         };
+        
+        const DjItem = memo(({ 
+            dj, index, isPlaying, isBeingDragged, dropIndicator, isColorPickerOpen, 
+            setRef, onPointerDown, onDragStart, onEditClick, onUpdate, onColorPickerToggle, onCopy, onRemove
+        }) => {
+            const colorPickerRef = useRef(null);
+            
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    const target = event.target;
+                    if (isColorPickerOpen && colorPickerRef.current && !colorPickerRef.current.contains(target) && !target.closest(`[data-color-picker-trigger="${dj.id}"]`)) {
+                        onColorPickerToggle(null);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, [isColorPickerOpen, dj.id, onColorPickerToggle]);
+
+            return (
+                <div 
+                    ref={setRef}
+                    className="relative"
+                >
+                    {dropIndicator.index === index && dropIndicator.position === 'top' && (
+                        <div className="absolute -top-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
+                    )}
+                    
+                    <div
+                        onDragStart={onDragStart}
+                        className={`
+                            bg-surface-container rounded-2xl flex items-center gap-4 transition-shadow duration-300 shadow-lg p-4
+                            ${isBeingDragged ? 'opacity-0' : 'opacity-100'}
+                            ${isPlaying ? 'ring-2 shadow-[0_0_12px_var(--tw-ring-color)]' : 'ring-1'}
+                        `}
+                        style={{ '--tw-ring-color': isPlaying ? dj.color : (dj.color + '99') }}
+                    >
+                         <div className="cursor-grab touch-none" data-drag-handle onPointerDown={(e) => onPointerDown(e, index)}>
+                            <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
+                         </div>
+                        <button 
+                            onClick={() => onEditClick(index)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
+                        >
+                            {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
+                        </button>
+                        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                            <div className="flex flex-col">
+                                <label className="text-xs text-on-surface-variant mb-1">{dj.isBuffer ? 'Title' : 'DJ Name'}</label>
+                                <input type="text" value={dj.name} onChange={(e) => onUpdate(index, 'name', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary"/>
+                            </div>
+                            <div className="flex flex-col">
+                                <label className="text-xs text-on-surface-variant mb-1">Time Slot</label>
+                                <div className="bg-surface-background/50 p-2 rounded-lg w-full text-center font-semibold text-on-surface-variant font-mono">
+                                    <span>{dj.startTime}</span>
+                                    <span className="mx-2">-</span>
+                                    <span>{dj.endTime}</span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col md:col-span-2">
+                                <label className="text-xs text-on-surface-variant mb-1">Duration (min)</label>
+                                <input type="number" value={dj.duration} onChange={(e) => onUpdate(index, 'duration', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary font-bold text-base" />
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-2 shrink-0 self-center">
+                            <div className="relative" ref={colorPickerRef}>
+                                <button type="button" data-color-picker-trigger={dj.id} onClick={() => onColorPickerToggle(dj.id === openColorPickerId ? null : dj.id)} className="w-9 h-9 rounded-full ring-2 ring-on-surface-variant" style={{ backgroundColor: dj.color }}/>
+                                {isColorPickerOpen && (
+                                    <div className="absolute w-40 bottom-full mb-2 right-0 bg-surface-background p-2 rounded-lg shadow-2xl grid grid-cols-4 gap-2 z-10">
+                                        {VIVID_COLORS.map(color => (<button key={color} type="button" onClick={() => { onUpdate(index, 'color', color); onColorPickerToggle(null); }} className="w-8 h-8 rounded-full transition-transform hover:scale-110 focus:outline-none ring-1 ring-black/20" style={{ backgroundColor: color }} />))}
+                                    </div>
+                                )}
+                            </div>
+                            <button onClick={() => onCopy(index)} className="text-on-surface-variant hover:text-brand-primary p-2 rounded-full transition-colors"><CopyIcon className="w-5 h-5"/></button>
+                            <button onClick={() => onRemove(index)} className="text-on-surface-variant hover:text-red-500 p-2 rounded-full transition-colors"><TrashIcon className="w-5 h-5"/></button>
+                        </div>
+                    </div>
+
+                    {dropIndicator.index === index && dropIndicator.position === 'bottom' && (
+                        <div className="absolute -bottom-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
+                    )}
+                </div>
+            );
+        });
 
 
         const TimetableEditor = ({ eventConfig, setEventConfig, timetable, setTimetable, setMode, storage }) => {
@@ -304,7 +388,7 @@
 
             const currentlyPlayingIndex = useMemo(() => schedule.findIndex(dj => now >= dj.startTime && now < dj.endTime), [now, schedule]);
 
-            const recalculateTimes = (timetableData, eventStartTime) => {
+            const recalculateTimes = useCallback((timetableData, eventStartTime) => {
                  if (!timetableData || timetableData.length === 0) return [];
                  const recalculated = [];
                  let lastEndTime = parseTime(eventStartTime);
@@ -321,31 +405,31 @@
                        lastEndTime = currentEndTime;
                  }
                  return recalculated;
-            };
+            }, []);
             
-            const handleEventConfigChange = (field, value) => {
+            const handleEventConfigChange = useCallback((field, value) => {
                 const newConfig = {...eventConfig, [field]: value};
                 setEventConfig(newConfig);
                 if (field === 'startTime') {
                     setTimetable(recalculateTimes(timetable, value));
                 }
-            };
+            }, [eventConfig, timetable, recalculateTimes]);
             
-            const handleUpdate = (index, field, value) => {
+            const handleUpdate = useCallback((index, field, value) => {
                 let newTimetable = [...timetable];
                 newTimetable[index] = { ...newTimetable[index], [field]: value };
                  if (field === 'duration') {
                        newTimetable = recalculateTimes(newTimetable, eventConfig.startTime);
                  }
                 setTimetable(newTimetable);
-            };
+            }, [timetable, eventConfig.startTime, recalculateTimes]);
 
-            const addNewDj = (isBuffer = false) => {
+            const addNewDj = useCallback((isBuffer = false) => {
                 const lastDj = timetable[timetable.length - 1];
                 const duration = isBuffer ? 5 : (lastDj ? lastDj.duration : 60);
                 const newDjData = { id: Date.now(), name: isBuffer ? 'バッファー' : `DJ ${timetable.filter(d => !d.isBuffer).length + 1}`, duration: duration, imageUrl: '', color: VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)], isBuffer, };
                 setTimetable(recalculateTimes([...timetable, newDjData], eventConfig.startTime));
-            };
+            }, [timetable, eventConfig.startTime, recalculateTimes]);
             
             const executeReset = () => {
                 setTimetable([]);
@@ -356,16 +440,16 @@
                 setIsResetConfirmOpen(false);
             };
 
-            const handleRemoveDj = (index) => setTimetable(recalculateTimes(timetable.filter((_, i) => i !== index), eventConfig.startTime));
+            const handleRemoveDj = useCallback((index) => setTimetable(recalculateTimes(timetable.filter((_, i) => i !== index), eventConfig.startTime)), [timetable, eventConfig.startTime, recalculateTimes]);
             
-            const handleCopyDj = (index) => {
+            const handleCopyDj = useCallback((index) => {
                 const djToCopy = { ...timetable[index], id: Date.now() };
                 let newTimetable = [...timetable];
                 newTimetable.splice(index + 1, 0, djToCopy);
                 setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
-            };
+            }, [timetable, eventConfig.startTime, recalculateTimes]);
 
-            const handlePointerDown = (e, index) => {
+            const handlePointerDown = useCallback((e, index) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
 
                 const draggableItem = itemRefs.current[index];
@@ -387,9 +471,9 @@
                     offsetX: clientX - rect.left,
                     offsetY: clientY - rect.top,
                 });
-            };
+            }, []);
             
-            const handlePointerMove = (e) => {
+            const handlePointerMove = useCallback((e) => {
                 if (draggedItemIndex === null) return;
                 const clientX = e.clientX ?? e.touches[0].clientX;
                 const clientY = e.clientY ?? e.touches[0].clientY;
@@ -417,131 +501,44 @@
                 } else {
                     setDropIndicator({ index: null, position: null });
                 }
-            };
+            }, [draggedItemIndex, ghost]);
             
-            const handlePointerUp = (e) => {
+            const handlePointerUp = useCallback((e) => {
                 if (draggedItemIndex === null) {
                     return;
                 }
                 
-                if(draggedItemIndex !== null) {
-                    const draggableElement = itemRefs.current[draggedItemIndex];
-                    if(draggableElement) draggableElement.setAttribute('draggable', 'false');
+                const draggableElement = itemRefs.current[draggedItemIndex];
+                if(draggableElement) draggableElement.setAttribute('draggable', 'false');
 
-                    if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
-                        const list = [...timetable];
-                        const [itemToMove] = list.splice(draggedItemIndex, 1);
+                if (dropIndicator.index !== null && draggedItemIndex !== dropIndicator.index) {
+                    const list = [...timetable];
+                    const [itemToMove] = list.splice(draggedItemIndex, 1);
 
-                        let insertAtIndex = dropIndicator.index;
-                        if (draggedItemIndex < dropIndicator.index) {
-                            insertAtIndex--;
-                        }
-                        if (dropIndicator.position === 'bottom') {
-                            insertAtIndex++;
-                        }
-                        list.splice(insertAtIndex, 0, itemToMove);
-                        setTimetable(recalculateTimes(list, eventConfig.startTime));
+                    let insertAtIndex = dropIndicator.index;
+                    if (draggedItemIndex < dropIndicator.index) {
+                        insertAtIndex--;
                     }
+                    if (dropIndicator.position === 'bottom') {
+                        insertAtIndex++;
+                    }
+                    list.splice(insertAtIndex, 0, itemToMove);
+                    setTimetable(recalculateTimes(list, eventConfig.startTime));
                 }
                 
                 setDraggedItemIndex(null);
                 setDropIndicator({ index: null, position: null });
                 setGhost(null);
-            };
+            }, [draggedItemIndex, dropIndicator, timetable, eventConfig.startTime, recalculateTimes]);
             
-            const handleDragStart = (e) => {
+            const handleDragStart = useCallback((e) => {
                 const img = new Image();
                 img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
                 e.dataTransfer.setDragImage(img, 0, 0);
-            };
-            
-            const colorPickerRef = useRef(null);
-            useEffect(() => {
-                const handleClickOutside = (event) => {
-                    const target = event.target;
-                    if (openColorPickerId && colorPickerRef.current && !colorPickerRef.current.contains(target) && !target.closest(`[data-color-picker-trigger="${openColorPickerId}"]`)) {
-                        setOpenColorPickerId(null);
-                    }
-                };
-                document.addEventListener("mousedown", handleClickOutside);
-                return () => document.removeEventListener("mousedown", handleClickOutside);
-            }, [openColorPickerId]);
+            }, []);
 
             const eventEnd = timetable.length > 0 ? timetable[timetable.length - 1].endTime : eventConfig.startTime;
             
-            const DjItem = ({ dj, index }) => {
-                const isBeingDragged = draggedItemIndex === index;
-                const isPlaying = currentlyPlayingIndex === index;
-
-                return (
-                    <div 
-                        ref={el => itemRefs.current[index] = el}
-                        className="relative"
-                    >
-                        {dropIndicator.index === index && dropIndicator.position === 'top' && (
-                            <div className="absolute -top-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
-                        )}
-                        
-                        <div
-                            onDragStart={handleDragStart}
-                            className={`
-                                bg-surface-container rounded-2xl flex items-center gap-4 transition-shadow duration-300 shadow-lg p-4
-                                ${isBeingDragged ? 'opacity-0' : 'opacity-100'}
-                                ${isPlaying ? 'ring-2 shadow-[0_0_12px_var(--tw-ring-color)]' : 'ring-1'}
-                            `}
-                            style={{ '--tw-ring-color': isPlaying ? dj.color : (dj.color + '99') }}
-                        >
-                             <div className="cursor-grab touch-none" data-drag-handle onPointerDown={(e) => handlePointerDown(e, index)}>
-                                <GripIcon className="w-6 h-6 text-on-surface-variant shrink-0"/>
-                             </div>
-                            <button 
-                                onClick={() => setEditingDjIndex(index)}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                className="w-16 h-16 rounded-full bg-surface-background flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-surface-background hover:ring-brand-primary transition-all"
-                            >
-                                {dj.imageUrl ? <img src={dj.imageUrl} className="w-full h-full object-cover" style={{ transform: 'translateZ(0)' }} /> : <UserIcon className="w-8 h-8 text-on-surface-variant"/>}
-                            </button>
-                            <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                {/*... form inputs ...*/}
-                                <div className="flex flex-col">
-                                    <label className="text-xs text-on-surface-variant mb-1">{dj.isBuffer ? 'Title' : 'DJ Name'}</label>
-                                    <input type="text" value={dj.name} onChange={(e) => handleUpdate(index, 'name', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary"/>
-                                </div>
-                                <div className="flex flex-col">
-                                    <label className="text-xs text-on-surface-variant mb-1">Time Slot</label>
-                                    <div className="bg-surface-background/50 p-2 rounded-lg w-full text-center font-semibold text-on-surface-variant font-mono">
-                                        <span>{dj.startTime}</span>
-                                        <span className="mx-2">-</span>
-                                        <span>{dj.endTime}</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col md:col-span-2">
-                                    <label className="text-xs text-on-surface-variant mb-1">Duration (min)</label>
-                                    <input type="number" value={dj.duration} onChange={(e) => handleUpdate(index, 'duration', e.target.value)} className="bg-surface-background text-on-surface p-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-brand-primary font-bold text-base" />
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-2 shrink-0 self-center">
-                                {/*... action buttons ...*/}
-                                <div className="relative" ref={colorPickerRef}>
-                                    <button type="button" data-color-picker-trigger={dj.id} onClick={() => setOpenColorPickerId(dj.id === openColorPickerId ? null : dj.id)} className="w-9 h-9 rounded-full ring-2 ring-on-surface-variant" style={{ backgroundColor: dj.color }}/>
-                                    {openColorPickerId === dj.id && (
-                                        <div className="absolute w-40 bottom-full mb-2 right-0 bg-surface-background p-2 rounded-lg shadow-2xl grid grid-cols-4 gap-2 z-10">
-                                            {VIVID_COLORS.map(color => (<button key={color} type="button" onClick={() => { handleUpdate(index, 'color', color); setOpenColorPickerId(null); }} className="w-8 h-8 rounded-full transition-transform hover:scale-110 focus:outline-none ring-1 ring-black/20" style={{ backgroundColor: color }} />))}
-                                        </div>
-                                    )}
-                                </div>
-                                <button onClick={() => handleCopyDj(index)} className="text-on-surface-variant hover:text-brand-primary p-2 rounded-full transition-colors"><CopyIcon className="w-5 h-5"/></button>
-                                <button onClick={() => handleRemoveDj(index)} className="text-on-surface-variant hover:text-red-500 p-2 rounded-full transition-colors"><TrashIcon className="w-5 h-5"/></button>
-                            </div>
-                        </div>
-
-                        {dropIndicator.index === index && dropIndicator.position === 'bottom' && (
-                            <div className="absolute -bottom-1.5 left-4 right-4 h-1 bg-brand-primary rounded-full" />
-                        )}
-                    </div>
-                );
-            };
-
             return (
                 <div 
                     className="p-4 md:p-8 max-w-4xl mx-auto" 
@@ -549,7 +546,7 @@
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerUp}
                 >
-                    {ghost && (
+                    {ghost && timetable[ghost.index] && (
                         <div
                             className="fixed pointer-events-none z-50 transition-transform"
                             style={{
@@ -579,7 +576,7 @@
                     {editingDjIndex !== null && (
                         <ImageEditModal 
                             dj={timetable[editingDjIndex]}
-                            onUpdate={(field, value) => handleUpdate(editingDjIndex, field, value)}
+                            onUpdate={handleUpdate}
                             onClose={() => setEditingDjIndex(null)}
                             storage={storage}
                         />
@@ -623,7 +620,23 @@
 
                     <div className="space-y-4" >
                         {timetable.map((dj, index) => (
-                           <DjItem dj={dj} index={index} key={dj.id} />
+                           <DjItem 
+                                key={dj.id}
+                                dj={dj} 
+                                index={index} 
+                                isPlaying={currentlyPlayingIndex === index}
+                                isBeingDragged={draggedItemIndex === index}
+                                dropIndicator={dropIndicator}
+                                isColorPickerOpen={openColorPickerId === dj.id}
+                                setRef={el => itemRefs.current[index] = el}
+                                onPointerDown={handlePointerDown}
+                                onDragStart={handleDragStart}
+                                onEditClick={setEditingDjIndex}
+                                onUpdate={handleUpdate}
+                                onColorPickerToggle={setOpenColorPickerId}
+                                onCopy={handleCopyDj}
+                                onRemove={handleRemoveDj}
+                           />
                         ))}
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row gap-4">
