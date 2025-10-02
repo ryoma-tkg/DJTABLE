@@ -92,7 +92,6 @@
             opacity: 0.5;
             transform: scale(1.05);
             background-color: #3f3f46; /* Zinc 700 */
-            outline: none; /* 掴んだ際の枠線を削除 */
         }
     </style>
 </head>
@@ -302,7 +301,7 @@
 
             return (
                 <div
-                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4 ${ringClass}`}
+                    className={`bg-surface-container rounded-2xl flex items-center gap-4 p-4`}
                     style={{ '--tw-ring-color': isPlaying ? dj.color : 'transparent' }}
                 >
                      <div className="cursor-grab touch-none" onPointerDown={onPointerDown}>
@@ -462,9 +461,7 @@
 
             const handlePointerMove = useCallback((e) => {
                 if (!dragStateRef.current.isDragging) return;
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                const targetEl = document.elementFromPoint(clientX, clientY)?.closest('[data-dj-index]');
+                const targetEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-dj-index]');
                 if (!targetEl) return;
                 const targetIndex = parseInt(targetEl.dataset.djIndex, 10);
                 const currentIndex = dragStateRef.current.draggedIndex;
@@ -484,22 +481,15 @@
                 setTimetable(currentTimetable => recalculateTimes(currentTimetable, eventConfig.startTime));
                 setDraggedIndex(null);
                 window.removeEventListener('pointermove', handlePointerMove);
-                window.removeEventListener('touchmove', handlePointerMove);
                 window.removeEventListener('pointerup', handlePointerUp);
-                window.removeEventListener('touchend', handlePointerUp);
             }, [eventConfig.startTime, recalculateTimes, setTimetable, handlePointerMove]);
 
             const handlePointerDown = useCallback((e, index) => {
-                // e.preventDefault(); // This can prevent scrolling on touch devices. Let's be more specific.
-                if (e.target.closest('.cursor-grab')) {
-                    e.preventDefault();
-                }
+                e.preventDefault();
                 setDraggedIndex(index);
                 dragStateRef.current.isDragging = true;
                 window.addEventListener('pointermove', handlePointerMove);
-                window.addEventListener('touchmove', handlePointerMove);
                 window.addEventListener('pointerup', handlePointerUp);
-                window.addEventListener('touchend', handlePointerUp);
             }, [handlePointerMove, handlePointerUp]);
 
             const toggleGodMode = () => {
@@ -573,7 +563,7 @@
                            <div
                                 key={dj.id}
                                 data-dj-index={index}
-                                className={`transition-transform duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
+                                className={`transition-all duration-300 ease-in-out ${draggedIndex === index ? 'dragging-item' : ''}`}
                            >
                                 <DjItem
                                     dj={dj}
@@ -607,7 +597,7 @@
                     <div className="absolute inset-0 overflow-hidden">
                         <img 
                           src={dj.imageUrl} 
-                          className="w-full h-full object-cover scale-110 opacity-25 blur-xl"
+                          className="w-full h-full object-cover scale-110 opacity-20 blur-2xl"
                         />
                     </div>
                 </div>
