@@ -19,17 +19,17 @@
     
     <!-- Firebase SDKs -->
     <script type="module">
-        // These global variables are provided by the environment.
+        // Paste your Firebase configuration object here.
         const firebaseConfig = {
           apiKey: "AIzaSyCDe_GANzGxXP0IRk90is37L1ZGobw1sQ8",
           authDomain: "djtable-2408d.firebaseapp.com",
           projectId: "djtable-2408d",
-          storageBucket: "djtable-2408d.firebasestorage.app",
+          storageBucket: "djtable-2408d.appspot.com",
           messagingSenderId: "780384107579",
           appId: "1:780384107579:web:97fddd203fedff885af01e"
         };
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = null; // Always null for GitHub Pages
+        const appId = 'github-pages-deploy'; // Fixed value for app ID
 
         window.firebaseConfig = firebaseConfig;
         window.initialAuthToken = initialAuthToken;
@@ -238,6 +238,11 @@
             const [editingDjIndex, setEditingDjIndex] = useState(null);
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
+            
+            // --- Drag and Drop State (Mouse and Touch) ---
+            const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+            const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
+            const itemRefs = useRef([]); // To store refs of each list item for position calculation
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -325,11 +330,8 @@
                 newTimetable.splice(index + 1, 0, djToCopy);
                 setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
             };
-
-            const [draggedItemIndex, setDraggedItemIndex] = useState(null);
-            const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
-
-
+            
+            // --- Drag and Drop Handlers (Mouse) ---
             const handleDragStart = (e, index) => {
                 setDraggedItemIndex(index);
                 e.dataTransfer.effectAllowed = 'move';
@@ -338,7 +340,6 @@
             const handleDragOver = (e, index) => {
                 e.preventDefault();
                 if (index === draggedItemIndex) return;
-                
                 const rect = e.currentTarget.getBoundingClientRect();
                 const midY = rect.top + rect.height / 2;
                 const position = e.clientY < midY ? 'top' : 'bottom';
@@ -352,27 +353,68 @@
             const handleDrop = (e) => {
                 e.preventDefault();
                 if (draggedItemIndex === null || dropIndicator.index === null) return;
-
-                const dropTargetIndex = dropIndicator.index;
-                const dropPosition = dropIndicator.position;
-
+                
                 const items = [...timetable];
-                const draggedItem = items[draggedItemIndex];
+                const draggedItem = items.splice(draggedItemIndex, 1)[0];
                 
-                const remainingItems = items.filter((_, i) => i !== draggedItemIndex);
-                
-                let insertAtIndex = dropTargetIndex > draggedItemIndex ? dropTargetIndex - 1 : dropTargetIndex;
-                
-                if (dropPosition === 'bottom') {
+                let insertAtIndex = dropIndicator.index;
+                if (draggedItemIndex < dropIndicator.index && dropIndicator.position === 'top') {
+                    // No change
+                } else if (draggedItemIndex < dropIndicator.index && dropIndicator.position === 'bottom') {
+                    insertAtIndex++;
+                } else if (draggedItemIndex > dropIndicator.index && dropIndicator.position === 'bottom') {
                     insertAtIndex++;
                 }
                 
-                remainingItems.splice(insertAtIndex, 0, draggedItem);
+                if (draggedItemIndex < insertAtIndex) {
+                    insertAtIndex--;
+                }
+
+                items.splice(insertAtIndex, 0, draggedItem);
                 
-                setTimetable(recalculateTimes(remainingItems, eventConfig.startTime));
+                setTimetable(recalculateTimes(items, eventConfig.startTime));
                 
                 setDraggedItemIndex(null);
                 setDropIndicator({ index: null, position: null });
+            };
+
+             // --- Drag and Drop Handlers (Touch) ---
+            const handleTouchStart = (e, index) => {
+                setDraggedItemIndex(index);
+            };
+
+            const handleTouchMove = (e) => {
+                if (draggedItemIndex === null) return;
+                e.preventDefault(); // Prevent scrolling while dragging
+
+                const touchY = e.touches[0].clientY;
+                
+                // Find which item we're hovering over
+                let targetIndex = -1;
+                let targetPosition = null;
+
+                itemRefs.current.forEach((ref, index) => {
+                    if (ref) {
+                        const rect = ref.getBoundingClientRect();
+                        const midY = rect.top + rect.height / 2;
+                        if (touchY >= rect.top && touchY <= rect.bottom) {
+                            targetIndex = index;
+                            targetPosition = touchY < midY ? 'top' : 'bottom';
+                        }
+                    }
+                });
+
+                if (targetIndex !== -1 && targetIndex !== draggedItemIndex) {
+                     setDropIndicator({ index: targetIndex, position: targetPosition });
+                }
+            };
+            
+            const handleTouchEnd = (e) => {
+                 if (draggedItemIndex === null) return;
+                // Use the same drop logic as mouse events
+                handleDrop({
+                    preventDefault: () => {}, // Mock event object
+                });
             };
             
             const colorPickerRef = useRef(null);
@@ -442,15 +484,17 @@
                     </div>
 
 
-                    <div className="space-y-4">
+                    <div className="space-y-4" onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
                         {timetable.map((dj, index) => (
                             <div 
+                                ref={el => itemRefs.current[index] = el}
                                 key={dj.id}
                                 draggable 
                                 onDragStart={(e) => handleDragStart(e, index)} 
                                 onDragOver={(e) => handleDragOver(e, index)}
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
+                                onTouchStart={(e) => handleTouchStart(e, index)}
                                 onDragEnd={() => {
                                     setDraggedItemIndex(null);
                                     setDropIndicator({ index: null, position: null });
@@ -607,7 +651,7 @@
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
                     <div key={`bg-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in -z-10">
-                        {djToDisplay && djToDisplay.imageUrl && (
+                        {djToDisplay && djToDisplay.imageUrl && !djToDisplay.isBuffer && (
                             <div className="absolute inset-0 overflow-hidden">
                                 <img src={djToDisplay.imageUrl} className="w-full h-full object-cover blur-2xl scale-110 opacity-20" />
                             </div>
@@ -708,11 +752,17 @@
             const [mode, setMode] = useState('edit');
             const [timetable, setTimetable] = useState([]);
             const [eventConfig, setEventConfig] = useState({ title: 'DJ Timekeeper Pro', startTime: '22:00' });
-            const [userId, setUserId] = useState(null);
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
             const dbRef = useRef(null);
             
             // --- Firebase Initialization and Auth ---
             useEffect(() => {
+                // Check for placeholder config before initializing
+                if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("...")) {
+                    // Don't initialize if config is placeholder
+                    return;
+                }
+
                 const { initializeApp, getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, getFirestore } = window.firebase;
                 
                 try {
@@ -723,7 +773,7 @@
 
                     onAuthStateChanged(auth, async (user) => {
                         if (user) {
-                            setUserId(user.uid);
+                            setIsAuthenticated(true);
                         } else {
                             if (window.initialAuthToken) {
                                 await signInWithCustomToken(auth, window.initialAuthToken);
@@ -739,10 +789,11 @@
             
             // --- Firestore Data Loading ---
             useEffect(() => {
-                if (!userId || !dbRef.current) return;
+                if (!isAuthenticated || !dbRef.current) return;
 
                 const { doc, onSnapshot } = window.firebase;
-                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'users', userId);
+                // Use a fixed document path for all users to share the same data
+                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'public', 'sharedTimetable');
 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -750,21 +801,26 @@
                         setTimetable(data.timetable || []);
                         setEventConfig(data.eventConfig || { title: 'DJ Timekeeper Pro', startTime: '22:00' });
                     } else {
-                        console.log("No such document! Creating initial data.");
+                        console.log("No shared document! Creating initial data.");
                     }
+                }, (error) => {
+                    console.error("Firestore snapshot error:", error);
                 });
 
                 return () => unsubscribe();
-            }, [userId]);
+            }, [isAuthenticated]);
 
             // --- Firestore Data Saving ---
             const saveDataToFirestore = useCallback(() => {
-                if (!userId || !dbRef.current) return;
+                if (!isAuthenticated || !dbRef.current) return;
                 const { doc, setDoc } = window.firebase;
-                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'users', userId);
+                 // Use a fixed document path for all users to share the same data
+                const docRef = doc(dbRef.current, 'artifacts', window.appId, 'public', 'sharedTimetable');
                 const dataToSave = { timetable, eventConfig };
-                setDoc(docRef, dataToSave, { merge: true });
-            }, [timetable, eventConfig, userId]);
+                setDoc(docRef, dataToSave, { merge: true }).catch(error => {
+                     console.error("Error saving data to Firestore:", error);
+                });
+            }, [timetable, eventConfig, isAuthenticated]);
 
             // Debounce saving
             useEffect(() => {
@@ -774,8 +830,37 @@
                 return () => clearTimeout(handler);
             }, [timetable, eventConfig, saveDataToFirestore]);
 
+            // Check for placeholder config before rendering the app
+            if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("...")) {
+                return (
+                    <div className="flex items-center justify-center h-screen p-8 text-center bg-surface-background text-on-surface">
+                        <div className="bg-surface-container p-8 rounded-2xl shadow-2xl max-w-2xl">
+                            <h1 className="text-2xl font-bold text-red-400 mb-4">Firebaseの設定が必要です</h1>
+                            <p className="text-on-surface-variant mb-6">
+                                このアプリを動作させるには、<code>index.html</code> ファイル内の <code>firebaseConfig</code> オブジェクトを、ご自身のFirebaseプロジェクトのものに置き換える必要があります。
+                            </p>
+                            <code className="bg-surface-background text-left p-4 rounded-lg block overflow-x-auto text-sm">
+                                <pre className="whitespace-pre-wrap">
+                                {`// index.html内のこの部分を書き換えてください
+                                const firebaseConfig = {
+        apiKey: "AIzaSyCDe_GANzGxXP0IRk90is37L1ZGobw1sQ8",
+        authDomain: "djtable-2408d.firebaseapp.com",
+        projectId: "djtable-2408d",
+        storageBucket: "djtable-2408d.appspot.com",
+        messagingSenderId: "780384107579",
+        appId: "1:780384107579:web:97fddd203fedff885af01e"
+                                };`}
+                                </pre>
+                            </code>
+                            <p className="text-on-surface-variant mt-6 text-sm">
+                                Firebaseコンソールでプロジェクトを作成し、ウェブアプリの設定画面から <code>firebaseConfig</code> をコピーして貼り付けてください。
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
 
-            if (!userId) {
+            if (!isAuthenticated) {
                 return <div className="flex items-center justify-center h-screen"><p className="text-2xl">Connecting...</p></div>;
             }
 
