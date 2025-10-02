@@ -664,12 +664,13 @@
             );
         };
         
-        const BackgroundImage = memo(({ dj, isFadingOut }) => {
-            const shouldShow = dj && dj.imageUrl && !dj.isBuffer;
-            if (!shouldShow) return null;
+        const BackgroundImage = memo(({ dj, isVisible }) => {
+            if (!dj || !dj.imageUrl || dj.isBuffer) {
+                return null;
+            }
 
             return (
-                <div className={`absolute inset-0 -z-20 ${isFadingOut ? 'animate-fade-out' : 'animate-fade-in'}`}>
+                <div className={`absolute inset-0 -z-20 ${isVisible ? 'animate-fade-in' : 'animate-fade-out'}`}>
                     <div className="absolute inset-0 overflow-hidden">
                         <FadeInImage 
                           src={dj.imageUrl} 
@@ -691,8 +692,9 @@
             const [timeLeft, setTimeLeft] = useState(0);
             const [progress, setProgress] = useState(0);
 
-            const [bgDj, setBgDj] = useState(null);
-            const [prevBgDj, setPrevBgDj] = useState(null);
+            const [backgroundDj, setBackgroundDj] = useState(null);
+            const [isBackgroundVisible, setIsBackgroundVisible] = useState(false);
+            const transitionTimeoutRef = useRef(null);
             
             const schedule = useMemo(() => {
                 if (timetable.length === 0) return [];
@@ -725,6 +727,9 @@
                 return () => {
                     clearInterval(timer);
                     window.removeEventListener('resize', updateWidth);
+                    if (transitionTimeoutRef.current) {
+                        clearTimeout(transitionTimeoutRef.current);
+                    }
                 };
             }, []);
             
@@ -751,13 +756,23 @@
                 
                 if (newCurrentDj?.id !== currentDj?.id) {
                      setCurrentDj(newCurrentDj);
-                     if (bgDj) { // Only set prevBgDj if there was a bgDj before
-                         setPrevBgDj(bgDj);
-                         setTimeout(() => {
-                             setPrevBgDj(null); // Clean up after animation
-                         }, 1500); // Must match fade-out animation duration
-                     }
-                     setBgDj(newCurrentDj);
+
+                    const newBgShouldBeVisible = newCurrentDj && newCurrentDj.imageUrl && !newCurrentDj.isBuffer;
+
+                    if (isBackgroundVisible) {
+                        setIsBackgroundVisible(false);
+                        transitionTimeoutRef.current = setTimeout(() => {
+                            setBackgroundDj(newCurrentDj);
+                            if (newBgShouldBeVisible) {
+                                setIsBackgroundVisible(true);
+                            }
+                        }, 1500);
+                    } else {
+                        setBackgroundDj(newCurrentDj);
+                        if (newBgShouldBeVisible) {
+                            setIsBackgroundVisible(true);
+                        }
+                    }
                 }
                 
                 setNextDj(newNextDj);
@@ -773,9 +788,9 @@
                     setProgress(0);
                 }
 
-            }, [now, schedule, currentDj, bgDj]);
+            }, [now, schedule, currentDj]); // Removed isBackgroundVisible from dependency array to prevent loops
             
-            // Preload next DJ's images
+            // Preload next DJ's images for smoother transitions
             useEffect(() => {
                 if (nextDj && nextDj.imageUrl) {
                     const img = new Image();
@@ -814,8 +829,7 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    {prevBgDj && <BackgroundImage dj={prevBgDj} isFadingOut={true} />}
-                    {bgDj && <BackgroundImage dj={bgDj} isFadingOut={false} />}
+                    <BackgroundImage dj={backgroundDj} isVisible={isBackgroundVisible} />
 
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
                            <h1 className="text-xl font-bold text-on-surface-variant tracking-wider">{eventConfig.title}</h1>
