@@ -57,9 +57,9 @@
                             '0%': { opacity: '0', transform: 'translateY(20px)' },
                             '100%': { opacity: '1', transform: 'translateY(0)' },
                         },
-                        dissolveIn: {
+                        dissolveInTo30: {
                             '0%': { opacity: '0' },
-                            '100%': { opacity: '1' },
+                            '100%': { opacity: '0.3' },
                         },
                           pulseGlow: {
                             '0%, 100%': { filter: 'drop-shadow(0 0 3px var(--tw-ring-color))', opacity: 1 },
@@ -68,7 +68,7 @@
                     },
                     animation: {
                         'fade-in-up': 'fadeInUp 0.7s ease-out forwards',
-                        'dissolve-in': 'dissolveIn 1.5s ease-in-out',
+                        'dissolve-in-to-30': 'dissolveInTo30 1.5s ease-in-out forwards',
                         'pulse-glow': 'pulseGlow 2.5s ease-in-out infinite',
                     }
                 }
@@ -96,14 +96,13 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         window.firebase = {
             initializeApp,
             getAuth,
             signInAnonymously,
-            signInWithCustomToken,
             onAuthStateChanged,
             getFirestore,
             doc,
@@ -239,10 +238,9 @@
             const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
             const [now, setNow] = useState(new Date());
             
-            // --- Drag and Drop State (Mouse and Touch) ---
             const [draggedItemIndex, setDraggedItemIndex] = useState(null);
             const [dropIndicator, setDropIndicator] = useState({ index: null, position: null });
-            const itemRefs = useRef([]); // To store refs of each list item for position calculation
+            const itemRefs = useRef([]); 
 
             useEffect(() => {
                 const timer = setInterval(() => setNow(new Date()), 1000);
@@ -331,7 +329,6 @@
                 setTimetable(recalculateTimes(newTimetable, eventConfig.startTime));
             };
             
-            // --- Drag and Drop Handlers (Mouse) ---
             const handleDragStart = (e, index) => {
                 setDraggedItemIndex(index);
                 e.dataTransfer.effectAllowed = 'move';
@@ -354,23 +351,18 @@
                 e.preventDefault();
                 if (draggedItemIndex === null || dropIndicator.index === null) return;
                 
-                const items = [...timetable];
-                const draggedItem = items.splice(draggedItemIndex, 1)[0];
+                let items = [...timetable];
+                const [draggedItem] = items.splice(draggedItemIndex, 1);
                 
-                let insertAtIndex = dropIndicator.index;
-                if (draggedItemIndex < dropIndicator.index && dropIndicator.position === 'top') {
-                    // No change
-                } else if (draggedItemIndex < dropIndicator.index && dropIndicator.position === 'bottom') {
-                    insertAtIndex++;
-                } else if (draggedItemIndex > dropIndicator.index && dropIndicator.position === 'bottom') {
-                    insertAtIndex++;
+                let newIndex = dropIndicator.index;
+                if(dropIndicator.position === 'bottom') {
+                    newIndex++;
                 }
-                
-                if (draggedItemIndex < insertAtIndex) {
-                    insertAtIndex--;
+                if (draggedItemIndex < newIndex) {
+                    newIndex--;
                 }
 
-                items.splice(insertAtIndex, 0, draggedItem);
+                items.splice(newIndex, 0, draggedItem);
                 
                 setTimetable(recalculateTimes(items, eventConfig.startTime));
                 
@@ -378,18 +370,15 @@
                 setDropIndicator({ index: null, position: null });
             };
 
-             // --- Drag and Drop Handlers (Touch) ---
             const handleTouchStart = (e, index) => {
                 setDraggedItemIndex(index);
             };
 
             const handleTouchMove = (e) => {
                 if (draggedItemIndex === null) return;
-                e.preventDefault(); // Prevent scrolling while dragging
-
+                
                 const touchY = e.touches[0].clientY;
                 
-                // Find which item we're hovering over
                 let targetIndex = -1;
                 let targetPosition = null;
 
@@ -411,9 +400,8 @@
             
             const handleTouchEnd = (e) => {
                  if (draggedItemIndex === null) return;
-                // Use the same drop logic as mouse events
                 handleDrop({
-                    preventDefault: () => {}, // Mock event object
+                    preventDefault: () => {}, 
                 });
             };
             
@@ -484,7 +472,7 @@
                     </div>
 
 
-                    <div className="space-y-4" onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+                    <div className="space-y-4" >
                         {timetable.map((dj, index) => (
                             <div 
                                 ref={el => itemRefs.current[index] = el}
@@ -495,6 +483,8 @@
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
                                 onTouchStart={(e) => handleTouchStart(e, index)}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
                                 onDragEnd={() => {
                                     setDraggedItemIndex(null);
                                     setDropIndicator({ index: null, position: null });
@@ -617,8 +607,8 @@
             const timelineTransform = useMemo(() => {
                 if (schedule.length === 0 || containerWidth === 0) return 'translateX(0px)';
                 
-                const itemWidth = 256; // w-64
-                const gap = 24; // gap-6
+                const itemWidth = 256; 
+                const gap = 24; 
                 const step = itemWidth + gap;
                 
                 const centerScreenOffset = containerWidth / 2;
@@ -626,7 +616,7 @@
                 
                 let targetIndex = displayIndex;
 
-                if (displayIndex === -1) { // Before event starts
+                if (displayIndex === -1) { 
                     const upcomingDjIndex = schedule.findIndex(dj => now < dj.startTime);
                     targetIndex = upcomingDjIndex !== -1 ? upcomingDjIndex : 0;
                 }
@@ -650,8 +640,7 @@
             
             return (
                 <div className="fixed inset-0 flex flex-col pt-4 md:pt-8 overflow-hidden" style={bgColorStyle}>
-                    {/* Background Image Container (un-blurred) */}
-                    <div key={`bg-img-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in -z-20 opacity-30">
+                    <div key={`bg-img-${djToDisplay?.id}`} className="absolute inset-0 animate-dissolve-in-to-30 -z-20">
                         {djToDisplay && djToDisplay.imageUrl && !djToDisplay.isBuffer && (
                             <div className="absolute inset-0 overflow-hidden">
                                 <img src={djToDisplay.imageUrl} className="w-full h-full object-cover scale-110" />
@@ -659,7 +648,6 @@
                         )}
                     </div>
 
-                    {/* Blurring Overlay using backdrop-filter */}
                     <div className="absolute inset-0 -z-10 backdrop-blur-2xl"></div>
 
                     <header className="absolute top-4 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 z-20">
@@ -757,18 +745,24 @@
             const [timetable, setTimetable] = useState([]);
             const [eventConfig, setEventConfig] = useState({ title: 'DJ Timekeeper Pro', startTime: '22:00' });
             const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [appStatus, setAppStatus] = useState('connecting'); // 'connecting', 'online', 'offline', 'config_error'
             const dbRef = useRef(null);
             
-            // --- Firebase Initialization and Auth ---
             useEffect(() => {
-                // Check for placeholder config before initializing
-                if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("...")) {
-                    // Don't initialize if config is placeholder
+                if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("AIzaSy...")) {
+                    setAppStatus('config_error');
                     return;
                 }
 
-                const { initializeApp, getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, getFirestore } = window.firebase;
+                const { initializeApp, getAuth, onAuthStateChanged, signInAnonymously, getFirestore } = window.firebase;
                 
+                const connectionTimeout = setTimeout(() => {
+                    if (appStatus === 'connecting') {
+                        console.warn("Connection to Firebase timed out. Entering offline mode.");
+                        setAppStatus('offline');
+                    }
+                }, 5000); // 5 second timeout
+
                 try {
                     const app = initializeApp(window.firebaseConfig);
                     const auth = getAuth(app);
@@ -777,26 +771,26 @@
 
                     onAuthStateChanged(auth, async (user) => {
                         if (user) {
+                            clearTimeout(connectionTimeout);
                             setIsAuthenticated(true);
+                            setAppStatus('online');
                         } else {
-                            if (window.initialAuthToken) {
-                                await signInWithCustomToken(auth, window.initialAuthToken);
-                            } else {
-                                await signInAnonymously(auth);
-                            }
+                            await signInAnonymously(auth);
                         }
                     });
                 } catch (e) {
                     console.error("Firebase initialization failed:", e);
+                    clearTimeout(connectionTimeout);
+                    setAppStatus('offline');
                 }
+                
+                return () => clearTimeout(connectionTimeout);
             }, []);
             
-            // --- Firestore Data Loading ---
             useEffect(() => {
-                if (!isAuthenticated || !dbRef.current) return;
+                if (appStatus !== 'online' || !isAuthenticated || !dbRef.current) return;
 
                 const { doc, onSnapshot } = window.firebase;
-                // Use a fixed document path for all users to share the same data
                 const docRef = doc(dbRef.current, 'artifacts', window.appId, 'public', 'sharedTimetable');
 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -809,68 +803,81 @@
                     }
                 }, (error) => {
                     console.error("Firestore snapshot error:", error);
+                    setAppStatus('offline'); // Enter offline mode on snapshot error
                 });
 
                 return () => unsubscribe();
-            }, [isAuthenticated]);
+            }, [isAuthenticated, appStatus]);
 
-            // --- Firestore Data Saving ---
             const saveDataToFirestore = useCallback(() => {
-                if (!isAuthenticated || !dbRef.current) return;
+                if (appStatus !== 'online' || !isAuthenticated || !dbRef.current) return;
+                
                 const { doc, setDoc } = window.firebase;
-                 // Use a fixed document path for all users to share the same data
                 const docRef = doc(dbRef.current, 'artifacts', window.appId, 'public', 'sharedTimetable');
                 const dataToSave = { timetable, eventConfig };
                 setDoc(docRef, dataToSave, { merge: true }).catch(error => {
                      console.error("Error saving data to Firestore:", error);
                 });
-            }, [timetable, eventConfig, isAuthenticated]);
+            }, [timetable, eventConfig, isAuthenticated, appStatus]);
 
-            // Debounce saving
             useEffect(() => {
-                const handler = setTimeout(() => {
-                    saveDataToFirestore();
-                }, 1000); // Save 1 second after last change
-                return () => clearTimeout(handler);
-            }, [timetable, eventConfig, saveDataToFirestore]);
+                if (appStatus === 'online') {
+                    const handler = setTimeout(() => {
+                        saveDataToFirestore();
+                    }, 1000);
+                    return () => clearTimeout(handler);
+                }
+            }, [timetable, eventConfig, saveDataToFirestore, appStatus]);
 
-            // Check for placeholder config before rendering the app
-            if (!window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.includes("...")) {
-                return (
-                    <div className="flex items-center justify-center h-screen p-8 text-center bg-surface-background text-on-surface">
-                        <div className="bg-surface-container p-8 rounded-2xl shadow-2xl max-w-2xl">
-                            <h1 className="text-2xl font-bold text-red-400 mb-4">Firebaseの設定が必要です</h1>
-                            <p className="text-on-surface-variant mb-6">
-                                このアプリを動作させるには、<code>index.html</code> ファイル内の <code>firebaseConfig</code> オブジェクトを、ご自身のFirebaseプロジェクトのものに置き換える必要があります。
-                            </p>
-                            <code className="bg-surface-background text-left p-4 rounded-lg block overflow-x-auto text-sm">
-                                <pre className="whitespace-pre-wrap">
+            switch (appStatus) {
+                case 'connecting':
+                    return <div className="flex items-center justify-center h-screen"><p className="text-2xl">Connecting...</p></div>;
+                
+                case 'config_error':
+                    return (
+                        <div className="flex items-center justify-center h-screen p-8 text-center bg-surface-background text-on-surface">
+                            <div className="bg-surface-container p-8 rounded-2xl shadow-2xl max-w-2xl">
+                                <h1 className="text-2xl font-bold text-red-400 mb-4">Firebaseの設定が必要です</h1>
+                                <p className="text-on-surface-variant mb-6">
+                                    このアプリを動作させるには、<code>index.html</code> ファイル内の <code>firebaseConfig</code> オブジェクトを、ご自身のFirebaseプロジェクトのものに置き換える必要があります。
+                                </p>
+                                <code className="bg-surface-background text-left p-4 rounded-lg block overflow-x-auto text-sm">
+                                    <pre className="whitespace-pre-wrap">
 {`// index.html内のこの部分を書き換えてください
 const firebaseConfig = {
   apiKey: "ご自身のAPIキー",
   authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "...",
-  appId: "..."
+  // ...
 };`}
-                                </pre>
-                            </code>
-                            <p className="text-on-surface-variant mt-6 text-sm">
-                                Firebaseコンソールでプロジェクトを作成し、ウェブアプリの設定画面から <code>firebaseConfig</code> をコピーして貼り付けてください。
-                            </p>
+                                    </pre>
+                                </code>
+                                <p className="text-on-surface-variant mt-6 text-sm">
+                                    Firebaseコンソールでプロジェクトを作成し、ウェブアプリの設定画面から <code>firebaseConfig</code> をコピーして貼り付けてください。
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                );
-            }
+                    );
 
-            if (!isAuthenticated) {
-                return <div className="flex items-center justify-center h-screen"><p className="text-2xl">Connecting...</p></div>;
+                case 'offline':
+                case 'online':
+                    return (
+                        <>
+                            {appStatus === 'offline' && (
+                                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500/90 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center gap-2 animate-fade-in-up">
+                                    <AlertTriangleIcon className="w-5 h-5" />
+                                    <span>オフラインモード (データは保存・共有されません)</span>
+                                </div>
+                            )}
+                            {mode === 'edit' ? 
+                                <TimetableEditor {...{eventConfig, setEventConfig, timetable, setTimetable, setMode}} /> : 
+                                <LiveView {...{timetable, eventConfig, setMode}} />
+                            }
+                        </>
+                    );
+                
+                default:
+                    return <div className="flex items-center justify-center h-screen"><p className="text-2xl">Loading...</p></div>;
             }
-
-            return mode === 'edit' ? 
-                <TimetableEditor {...{eventConfig, setEventConfig, timetable, setTimetable, setMode}} /> : 
-                <LiveView {...{timetable, eventConfig, setMode}} />;
         };
 
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
